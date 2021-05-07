@@ -25,6 +25,14 @@
 //
 //------------------------------------------------------------------------------
 
+#define SOIL_0_VOLW_FIELD  1
+#define SOIL_2_SOWP_FIELD  2
+#define TEMP_0_TEMP_FIELD  3
+#define TMPH_0_TEMP_FIELD  4
+#define TMPH_0_HUMD_FIELD  5
+#define IRAD_0_CNTS_FIELD  6
+#define FLOW_0_TICK_FIELD  7
+
 //------------------------------------------------------------------------------
 //     ___      __   ___  __   ___  ___  __
 //      |  \ / |__) |__  |  \ |__  |__  /__`
@@ -47,60 +55,14 @@ EthernetClient client;
 int32_t thingspeak_response = 0;
 uint16_t num_tries = 0;
 
-//------------------------------------------------------------------------------
-//      __   __   __  ___  __  ___      __   ___  __
-//     |__) |__) /  \  |  /  \  |  \ / |__) |__  /__`
-//     |    |  \ \__/  |  \__/  |   |  |    |___ .__/
-//
-//------------------------------------------------------------------------------
-
-//------------------------------------------------------------------------------
-//      __        __          __
-//     |__) |  | |__) |    | /  `
-//     |    \__/ |__) |___ | \__,
-//
-//------------------------------------------------------------------------------
-
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
   Ethernet.begin(mac);
-  Serial.println("Hello!");
-  Serial.println(Ethernet.localIP());
-  ThingSpeak.begin(client);
+
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  while(thingspeak_response != 200) {
-    thingspeak_response = ThingSpeak.writeField(channel_id, 1, 69, api_key);
-    num_tries++;
-  }
-  Serial.println(num_tries);
-  num_tries = 0;
-  thingspeak_response = 0;
-  delay(30000);
 
-  while(thingspeak_response != 200) {
-    thingspeak_response = ThingSpeak.writeField(channel_id, 1, 420, api_key);
-    num_tries++;
-  }
-  Serial.println(num_tries);
-  num_tries = 0;
-  thingspeak_response = 0;
-  delay(30000);
 }
-
-//------------------------------------------------------------------------------
-//      __   __              ___  ___
-//     |__) |__) | \  /  /\   |  |__
-//     |    |  \ |  \/  /~~\  |  |___
-//
-//------------------------------------------------------------------------------
-
-//------------------------------------------------------------------------------
-//        __   __   __
-//     | /__` |__) /__`
-//     | .__/ |  \ .__/
-//
-//------------------------------------------------------------------------------
