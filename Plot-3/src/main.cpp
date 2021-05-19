@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-// GFU Agrivoltaics Plot 1 (Sun Plot) Monitor
+// GFU Agrivoltaics ThingSpeak Test
 // Nathaniel Hudson
 // nhudson18@georgefox.edu
 // Summer 2021
@@ -33,18 +33,15 @@
 //
 //------------------------------------------------------------------------------
 
-// ThingSpeak Environmental Fields
-#define NUM_FIELDS_ENV     (7)
-#define SOIL_0_VOLW_FIELD  (1)
-#define SOIL_2_SOWP_FIELD  (2)
-#define TEMP_0_TEMP_FIELD  (3)
-#define TMPH_0_TEMP_FIELD  (4)
-#define TMPH_0_HUMD_FIELD  (5)
-#define IRAD_0_CNTS_FIELD  (6)
-#define FLOW_0_TICK_FIELD  (7)
+// ThingSpeak PV Fields
+#define NUM_FIELDS_PV      (3)
+#define TEMP_5_TEMP_FIELD  (1)
+#define TEMP_6_TEMP_FIELD  (2)
+#define TEMP_7_TEMP_FIELD  (3)
+#define IRAD_2_CNTS_FIELD  (4)
 
 // Pin definitions
-#define ONE_WIRE_PIN       (2)
+#define ONE_WIRE_PIN       (48)
 #define SD_CS_PIN          (4)
 #define RELAY_TRIG_PIN     (7)
 
@@ -70,32 +67,35 @@
 //
 //------------------------------------------------------------------------------
 
-static const uint8_t mac[] = {MAC_1_BYTE_0, MAC_1_BYTE_1, MAC_1_BYTE_2,
-  MAC_1_BYTE_3, MAC_1_BYTE_4, MAC_1_BYTE_5};
-static const char* plot_1_env_api_key = PLOT_1_ENV_API_KEY;
+static const uint8_t mac[] = {MAC_3_BYTE_0, MAC_3_BYTE_1, MAC_3_BYTE_2,
+  MAC_3_BYTE_3, MAC_3_BYTE_4, MAC_3_BYTE_5};
 EthernetClient client;
 EthernetUDP udp;
 NTPClient ntp(udp, TIME_ZONE * SECS_PER_HOUR);
 int32_t thingspeak_response = 0;
+const char* plot_3_pv_api_key = PLOT_3_PV_API_KEY;
 uint16_t num_tries = 0;
-DeviceAddress temp_0_addr = {TEMP_0_ADDR_0, TEMP_0_ADDR_1, TEMP_0_ADDR_2,
-  TEMP_0_ADDR_3, TEMP_0_ADDR_4, TEMP_0_ADDR_5, TEMP_0_ADDR_6, TEMP_0_ADDR_7};
+DeviceAddress temp_5_addr = {TEMP_5_ADDR_0, TEMP_5_ADDR_1, TEMP_5_ADDR_2,
+  TEMP_5_ADDR_3, TEMP_5_ADDR_4, TEMP_5_ADDR_5, TEMP_5_ADDR_6, TEMP_5_ADDR_7};
+DeviceAddress temp_6_addr = {TEMP_6_ADDR_0, TEMP_6_ADDR_1, TEMP_6_ADDR_2,
+  TEMP_6_ADDR_3, TEMP_6_ADDR_4, TEMP_6_ADDR_5, TEMP_6_ADDR_6, TEMP_6_ADDR_7};
+DeviceAddress temp_7_addr = {TEMP_7_ADDR_0, TEMP_7_ADDR_1, TEMP_7_ADDR_2,
+  TEMP_7_ADDR_3, TEMP_7_ADDR_4, TEMP_7_ADDR_5, TEMP_7_ADDR_6, TEMP_7_ADDR_7};
 
 OneWire oneWire(ONE_WIRE_PIN);
 DallasTemperature temp_sensors(&oneWire);
 
-Adafruit_AM2315 am2315;
 Adafruit_ADS1115 ads;
 
 time_t cur_time;
 time_t prev_time;
 
-float temp_0_temp;
+// Sensor data
+float temp_5_temp;
+float temp_6_temp;
+float temp_7_temp;
 
-float tmph_0_temp;
-float tmph_0_humd;
-
-int16_t irad_0_cnts;
+int16_t irad_2_cnts;
 
 //------------------------------------------------------------------------------
 //      __   __   __  ___  __  ___      __   ___  __
@@ -130,8 +130,6 @@ void setup() {
   Serial.println("Temp sensors initialized");
   Serial.print(temp_sensors.getDeviceCount());
   Serial.println(" sensors found");
-  am2315.begin();
-  Serial.println("Ambient temp sensor initialized");
   ads.begin();
   Serial.println("ADC initialized");
 
@@ -149,12 +147,13 @@ void loop() {
     Serial.println("Reading sensors");
     read_sensors();
     Serial.println("Sending data to ThingSpeak");
-    ThingSpeak.setField(TEMP_0_TEMP_FIELD, temp_0_temp);
-    ThingSpeak.setField(TMPH_0_TEMP_FIELD, tmph_0_temp);
-    ThingSpeak.setField(TMPH_0_HUMD_FIELD, tmph_0_humd);
-    ThingSpeak.setField(IRAD_0_CNTS_FIELD, irad_0_cnts);
-    Serial.println(ThingSpeak.writeFields(PLOT_1_ENV_CHANNEL, plot_1_env_api_key));
+    ThingSpeak.setField(TEMP_5_TEMP_FIELD, temp_5_temp);
+    ThingSpeak.setField(TEMP_6_TEMP_FIELD, temp_6_temp);
+    ThingSpeak.setField(TEMP_7_TEMP_FIELD, temp_7_temp);
+    ThingSpeak.setField(IRAD_2_CNTS_FIELD, irad_2_cnts);
+    Serial.println(ThingSpeak.writeFields(PLOT_3_PV_CHANNEL, plot_3_pv_api_key));
   }
+
 }
 
 // Provides the time library with the current real-world time
@@ -174,16 +173,26 @@ void read_sensors()
   // Sensor sampling loop; Temperature
   // Grab 100 samples; samples every 100us
   float temp_samples_1 = 0;
+  float temp_samples_2 = 0;
+  float temp_samples_3 = 0;
   for (int i = 0; i < NUM_SAMPLES; i++)
   {
     temp_sensors.requestTemperatures();
-    temp_samples_1 += temp_sensors.getTempC(temp_0_addr);
+    temp_samples_1 += temp_sensors.getTempC(temp_5_addr);
+    temp_samples_2 += temp_sensors.getTempC(temp_6_addr);
+    temp_samples_3 += temp_sensors.getTempC(temp_7_addr);
     
     delayMicroseconds(100);
   }
-  temp_0_temp = temp_samples_1 / NUM_SAMPLES; // Report the average of the samples we gathered
-  Serial.print("Temp 0: ");
-  Serial.println(temp_0_temp);
+  temp_5_temp = temp_samples_1 / NUM_SAMPLES; // Report the average of the samples we gathered
+  temp_6_temp = temp_samples_2 / NUM_SAMPLES;
+  temp_7_temp = temp_samples_3 / NUM_SAMPLES;
+  Serial.print("Temp 1: ");
+  Serial.println(temp_5_temp);
+  Serial.print("Temp 2: ");
+  Serial.println(temp_6_temp);
+  Serial.print("Temp 3: ");
+  Serial.println(temp_7_temp);
 
 
   // Sensor sampling loop; Irradiance
@@ -195,28 +204,8 @@ void read_sensors()
 
     delayMicroseconds(100);
   }
-  irad_0_cnts = irradiance_samples / NUM_SAMPLES; // Report the average of the samples we gathered
+  irad_2_cnts = irradiance_samples / NUM_SAMPLES; // Report the average of the samples we gathered
   Serial.print("Irradiance: ");
-  Serial.println(irad_0_cnts);
-
-  // Sensor sampling loop; Temperature and Humidity
-  // Grab 100 samples; samples every 100us
-  float amb_hum_samples = 0;  
-  float amb_temp_samples = 0;
-  float amb_temp, amb_hum;
-  for (int i = 0; i < NUM_SAMPLES; i++)
-  {
-    am2315.readTemperatureAndHumidity(&amb_temp, &amb_hum); // Read temp & humidity
-    amb_temp_samples += amb_temp;
-    amb_hum_samples += amb_hum;
-
-    delayMicroseconds(100);
-  }
-  tmph_0_humd = amb_hum_samples / NUM_SAMPLES; // Report the average of the samples we gathered
-  tmph_0_temp = amb_temp_samples / NUM_SAMPLES; // Report the average of the samples we gathered
-  Serial.print("Ambient Temp: ");
-  Serial.println(tmph_0_temp);
-  Serial.println("Ambient Humidity: ");
-  Serial.println(tmph_0_humd);
+  Serial.println(irad_2_cnts);
 
 }
