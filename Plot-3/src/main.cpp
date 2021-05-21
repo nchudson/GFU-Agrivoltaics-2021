@@ -51,7 +51,8 @@
 // Program parameters
 #define TIME_ZONE          (-7)
 #define SECS_PER_HOUR      (3600)
-#define NUM_SAMPLES        (5)
+#define NUM_SAMPLES        (20)
+#define NTP_SYNC_INTERVAL  (600)
 
 //------------------------------------------------------------------------------
 //     ___      __   ___  __   ___  ___  __
@@ -87,6 +88,11 @@ DallasTemperature temp_sensors(&oneWire);
 
 Adafruit_ADS1115 ads;
 
+static char date_string[24];
+static char file_name[12];
+
+File log_file;
+
 time_t cur_time;
 time_t prev_time;
 
@@ -106,6 +112,7 @@ int16_t irad_2_cnts;
 
 time_t get_ntp_time();
 void read_sensors();
+void create_log_file();
 
 //------------------------------------------------------------------------------
 //      __        __          __
@@ -117,6 +124,7 @@ void read_sensors();
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
+  Serial.println("HEllo1");
   Ethernet.begin(mac);
   Serial.println(Ethernet.localIP());
   ThingSpeak.begin(client);
@@ -125,6 +133,7 @@ void setup() {
   ntp.begin();
   ntp.update();
   setSyncProvider(get_ntp_time);
+  setSyncInterval(NTP_SYNC_INTERVAL);
 
   temp_sensors.begin();
   Serial.println("Temp sensors initialized");
@@ -136,6 +145,9 @@ void setup() {
   cur_time = now();
   Serial.println(ntp.getFormattedTime());
   prev_time = now();
+
+  SD.begin(SD_CS_PIN);
+  create_log_file();
 }
 
 void loop() {
@@ -152,8 +164,20 @@ void loop() {
     ThingSpeak.setField(TEMP_7_TEMP_FIELD, temp_7_temp);
     ThingSpeak.setField(IRAD_2_CNTS_FIELD, irad_2_cnts);
     Serial.println(ThingSpeak.writeFields(PLOT_3_PV_CHANNEL, plot_3_pv_api_key));
+    time_t t = now();
+    sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT,", year(t), month(t), day(t), hour(t), minute(t), second(t));
+    log_file.print(date_string);
+    log_file.print(",");
+    log_file.print(temp_5_temp);
+    log_file.print(",");
+    log_file.print(temp_6_temp);
+    log_file.print(",");
+    log_file.print(temp_7_temp);
+    log_file.print(",");
+    log_file.println(irad_2_cnts);
+    log_file.flush();
   }
-
+  Ethernet.maintain();
 }
 
 // Provides the time library with the current real-world time
@@ -177,10 +201,10 @@ void read_sensors()
   float temp_samples_3 = 0;
   for (int i = 0; i < NUM_SAMPLES; i++)
   {
-    temp_sensors.requestTemperatures();
-    temp_samples_1 += temp_sensors.getTempC(temp_5_addr);
-    temp_samples_2 += temp_sensors.getTempC(temp_6_addr);
-    temp_samples_3 += temp_sensors.getTempC(temp_7_addr);
+    // temp_sensors.requestTemperatures();
+    // temp_samples_1 += temp_sensors.getTempC(temp_5_addr);
+    // temp_samples_2 += temp_sensors.getTempC(temp_6_addr);
+    // temp_samples_3 += temp_sensors.getTempC(temp_7_addr);
     
     delayMicroseconds(100);
   }
@@ -208,4 +232,30 @@ void read_sensors()
   Serial.print("Irradiance: ");
   Serial.println(irad_2_cnts);
 
+}
+
+// Manages log_file files for the SD card
+void create_log_file()
+{
+  // Close the current file and create a new one
+  log_file.close();
+  time_t t = now();
+
+  // Get the current time (MM/DD_HH) and use it as the file name
+  sprintf(file_name, "%02d-%02d_%02d.log", month(t), day(t), hour(t));
+  log_file = SD.open(file_name, FILE_WRITE);
+
+  if (!log_file)
+  {
+    Serial.print("File failed to open with name '");
+    Serial.print(file_name);
+    Serial.println("'");
+  }
+  else
+  {
+    Serial.print("Opened log_file file with name '");
+    Serial.print(file_name);
+    Serial.println("'");
+  }
+  log_file.println("created_at,entry_id,field1,field2,field3,field4");
 }

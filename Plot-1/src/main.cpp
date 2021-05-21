@@ -54,7 +54,8 @@
 // Program parameters
 #define TIME_ZONE          (-7)
 #define SECS_PER_HOUR      (3600)
-#define NUM_SAMPLES        (5)
+#define NUM_SAMPLES        (20)
+#define NTP_SYNC_INTERVAL  (600)
 
 //------------------------------------------------------------------------------
 //     ___      __   ___  __   ___  ___  __
@@ -87,8 +88,16 @@ DallasTemperature temp_sensors(&oneWire);
 Adafruit_AM2315 am2315;
 Adafruit_ADS1115 ads;
 
+static const char date_string[24];
+static const char file_name[12];
+
+File log_file;
+
 time_t cur_time;
 time_t prev_time;
+
+float soil_0_volw;
+float soil_2_sowp;
 
 float temp_0_temp;
 
@@ -96,6 +105,8 @@ float tmph_0_temp;
 float tmph_0_humd;
 
 int16_t irad_0_cnts;
+
+float flow_0_tick;
 
 //------------------------------------------------------------------------------
 //      __   __   __  ___  __  ___      __   ___  __
@@ -106,6 +117,7 @@ int16_t irad_0_cnts;
 
 time_t get_ntp_time();
 void read_sensors();
+void create_log_file();
 
 //------------------------------------------------------------------------------
 //      __        __          __
@@ -125,6 +137,7 @@ void setup() {
   ntp.begin();
   ntp.update();
   setSyncProvider(get_ntp_time);
+  setSyncInterval(NTP_SYNC_INTERVAL);
 
   temp_sensors.begin();
   Serial.println("Temp sensors initialized");
@@ -138,6 +151,10 @@ void setup() {
   cur_time = now();
   Serial.println(ntp.getFormattedTime());
   prev_time = now();
+
+  SD.begin(SD_CS_PIN);
+  create_log_file();
+
 }
 
 void loop() {
@@ -149,12 +166,37 @@ void loop() {
     Serial.println("Reading sensors");
     read_sensors();
     Serial.println("Sending data to ThingSpeak");
+    ThingSpeak.setField(SOIL_0_VOLW_FIELD, soil_0_volw);
+    ThingSpeak.setField(SOIL_2_SOWP_FIELD, soil_2_sowp);
     ThingSpeak.setField(TEMP_0_TEMP_FIELD, temp_0_temp);
     ThingSpeak.setField(TMPH_0_TEMP_FIELD, tmph_0_temp);
     ThingSpeak.setField(TMPH_0_HUMD_FIELD, tmph_0_humd);
     ThingSpeak.setField(IRAD_0_CNTS_FIELD, irad_0_cnts);
-    Serial.println(ThingSpeak.writeFields(PLOT_1_ENV_CHANNEL, plot_1_env_api_key));
+    ThingSpeak.setField(FLOW_0_TICK_FIELD, flow_0_tick);
+    thingspeak_response = (ThingSpeak.writeFields(PLOT_1_ENV_CHANNEL, plot_1_env_api_key));
+    Serial.println(thingspeak_response);
+    time_t t = now();
+    sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT,", year(t), month(t), day(t), hour(t), minute(t), second(t));
+    log_file.print(date_string);
+    log_file.print(soil_0_volw);
+    log_file.print(",");
+    log_file.print(soil_2_sowp);
+    log_file.print(",");
+    log_file.print(temp_0_temp);
+    log_file.print(",");
+    log_file.print(tmph_0_temp);
+    log_file.print(",");
+    log_file.print(tmph_0_humd);
+    log_file.print(",");
+    log_file.print(irad_0_cnts);
+    log_file.print(",");
+    log_file.println(flow_0_tick);
+    log_file.flush();
+    if(minute(cur_time) == 0) {
+      create_log_file();
+    }
   }
+  Ethernet.maintain();
 }
 
 // Provides the time library with the current real-world time
@@ -219,4 +261,30 @@ void read_sensors()
   Serial.println("Ambient Humidity: ");
   Serial.println(tmph_0_humd);
 
+}
+
+// Manages log_file files for the SD card
+void create_log_file()
+{
+  // Close the current file and create a new one
+  log_file.close();
+  time_t t = now();
+
+  // Get the current time (MM/DD_HH) and use it as the file name
+  sprintf(file_name, "%02d%02d%02d.log", month(t), day(t), hour(t));
+  log_file = SD.open(file_name, FILE_WRITE);
+
+  if (!log_file)
+  {
+    Serial.print("File failed to open with name '");
+    Serial.print(file_name);
+    Serial.println("'");
+  }
+  else
+  {
+    Serial.print("Opened log_file file with name '");
+    Serial.print(file_name);
+    Serial.println("'");
+  }
+  log_file.println("created_at,entry_id,field1,field2,field3,field4,field5,field6,field7");
 }

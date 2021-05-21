@@ -60,7 +60,8 @@
 // Program parameters
 #define TIME_ZONE          (-7)
 #define SECS_PER_HOUR      (3600)
-#define NUM_SAMPLES        (100)
+#define NUM_SAMPLES        (20)
+#define NTP_SYNC_INTERVAL  (600)
 
 //------------------------------------------------------------------------------
 //     ___      __   ___  __   ___  ___  __
@@ -100,19 +101,30 @@ DallasTemperature temp_sensors(&oneWire);
 Adafruit_AM2315 am2315;
 Adafruit_ADS1115 ads;
 
+static const char date_string[24];
+static const char file_name[12];
+
+File log_file;
+
 time_t cur_time;
 time_t prev_time;
 
 // Sensor data
+float soil_1_volw;
+float soil_3_sowp;
+
 float temp_1_temp;
-float temp_2_temp;
-float temp_3_temp;
-float temp_4_temp;
 
 float tmph_1_temp;
 float tmph_1_humd;
 
 int16_t irad_1_cnts;
+
+float flow_1_tick;
+
+float temp_2_temp;
+float temp_3_temp;
+float temp_4_temp;
 
 //------------------------------------------------------------------------------
 //      __   __   __  ___  __  ___      __   ___  __
@@ -123,6 +135,7 @@ int16_t irad_1_cnts;
 
 time_t get_ntp_time();
 void read_sensors();
+void create_log_file();
 
 //------------------------------------------------------------------------------
 //      __        __          __
@@ -142,19 +155,23 @@ void setup() {
   ntp.begin();
   ntp.update();
   setSyncProvider(get_ntp_time);
+  setSyncInterval(NTP_SYNC_INTERVAL);
 
   temp_sensors.begin();
   Serial.println("Temp sensors initialized");
   Serial.print(temp_sensors.getDeviceCount());
   Serial.println(" sensors found");
-  // am2315.begin();
-  // Serial.println("Ambient temp sensor initialized");
+  am2315.begin();
+  Serial.println("Ambient temp sensor initialized");
   // ads.begin();
   // Serial.println("ADC initialized");
 
   cur_time = now();
   Serial.println(ntp.getFormattedTime());
   prev_time = now();
+
+  SD.begin(SD_CS_PIN);
+  create_log_file();
 }
 
 void loop() {
@@ -162,7 +179,7 @@ void loop() {
   prev_time = cur_time;
   cur_time = now();
 
-  if(minute(cur_time) == 0 && minute(prev_time) != 0) {
+  if((hour(cur_time) != hour(prev_time)) && (hour(cur_time) >= 9 && hour(cur_time) <= 17)) {
     Serial.println("Enabling loads");
     digitalWrite(RELAY_TRIG_PIN, HIGH);
     delay(100);
@@ -173,16 +190,47 @@ void loop() {
     Serial.println("Reading sensors");
     read_sensors();
     Serial.println("Sending data to ThingSpeak");
+    ThingSpeak.setField(SOIL_1_VOLW_FIELD, soil_1_volw);
+    ThingSpeak.setField(SOIL_3_SOWP_FIELD, soil_3_sowp);
     ThingSpeak.setField(TEMP_1_TEMP_FIELD, temp_1_temp);
     ThingSpeak.setField(TMPH_1_TEMP_FIELD, tmph_1_temp);
     ThingSpeak.setField(TMPH_1_HUMD_FIELD, tmph_1_humd);
     ThingSpeak.setField(IRAD_1_CNTS_FIELD, irad_1_cnts);
+    ThingSpeak.setField(FLOW_1_TICK_FIELD, flow_1_tick);
     Serial.println(ThingSpeak.writeFields(PLOT_2_ENV_CHANNEL, plot_2_env_api_key));
     ThingSpeak.setField(TEMP_2_TEMP_FIELD, temp_2_temp);
     ThingSpeak.setField(TEMP_3_TEMP_FIELD, temp_3_temp);
     ThingSpeak.setField(TEMP_4_TEMP_FIELD, temp_4_temp);
     Serial.println(ThingSpeak.writeFields(PLOT_2_PV_CHANNEL, plot_2_pv_api_key));
+    time_t t = now();
+    sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT,", year(t), month(t), day(t), hour(t), minute(t), second(t));
+    log_file.print(date_string);
+    log_file.print(",");
+    log_file.print(soil_1_volw);
+    log_file.print(",");
+    log_file.print(soil_3_sowp);
+    log_file.print(",");
+    log_file.print(temp_1_temp);
+    log_file.print(",");
+    log_file.print(tmph_1_temp);
+    log_file.print(",");
+    log_file.print(tmph_1_humd);
+    log_file.print(",");
+    log_file.print(irad_1_cnts);
+    log_file.print(",");
+    log_file.print(flow_1_tick);
+    log_file.print(",");
+    log_file.print(temp_2_temp);
+    log_file.print(",");
+    log_file.print(temp_3_temp);
+    log_file.print(",");
+    log_file.println(temp_4_temp);
+    log_file.flush();
+    if(minute(cur_time) == 0) {
+      create_log_file();
+    }
   }
+  Ethernet.maintain();
 
 }
 
@@ -250,7 +298,7 @@ void read_sensors()
   float amb_temp, amb_hum;
   for (int i = 0; i < NUM_SAMPLES; i++)
   {
-    // am2315.readTemperatureAndHumidity(&amb_temp, &amb_hum); // Read temp & humidity
+    am2315.readTemperatureAndHumidity(&amb_temp, &amb_hum); // Read temp & humidity
     amb_temp_samples += amb_temp;
     amb_hum_samples += amb_hum;
 
@@ -263,6 +311,30 @@ void read_sensors()
   Serial.println("Ambient Humidity: ");
   Serial.println(tmph_1_humd);
 
+}
 
+// Manages log_file files for the SD card
+void create_log_file()
+{
+  // Close the current file and create a new one
+  log_file.close();
+  time_t t = now();
 
+  // Get the current time (MM/DD_HH) and use it as the file name
+  sprintf(file_name, "%02d-%02d_%02d.log", month(t), day(t), hour(t));
+  log_file = SD.open(file_name, FILE_WRITE);
+
+  if (!log_file)
+  {
+    Serial.print("File failed to open with name '");
+    Serial.print(file_name);
+    Serial.println("'");
+  }
+  else
+  {
+    Serial.print("Opened log_file file with name '");
+    Serial.print(file_name);
+    Serial.println("'");
+  }
+  log_file.println("created_at,entry_id,field1,field2,field3,field4,field5,field6,field7,field1,field2,field3");
 }
