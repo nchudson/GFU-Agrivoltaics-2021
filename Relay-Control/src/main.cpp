@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-#define DELAY_TIME (631600)
+#define DELAY_TIME (600000)
 #define DEBOUNCE_TIME (50)
 
 

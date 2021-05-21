@@ -161,8 +161,8 @@ void setup() {
   Serial.println("Temp sensors initialized");
   Serial.print(temp_sensors.getDeviceCount());
   Serial.println(" sensors found");
-  am2315.begin();
-  Serial.println("Ambient temp sensor initialized");
+  // am2315.begin();
+  // Serial.println("Ambient temp sensor initialized");
   // ads.begin();
   // Serial.println("ADC initialized");
 
@@ -248,6 +248,19 @@ time_t get_ntp_time()
 void read_sensors()
 {
 
+  // Sensor sampling loop; Irradiance
+  // Grab 100 samples; samples every 100us
+  long irradiance_samples = 0;
+  for (int i = 0; i < NUM_SAMPLES; i++)
+  {
+    // irradiance_samples += ads.readADC_SingleEnded(0);
+
+    delayMicroseconds(100);
+  }
+  irad_1_cnts = irradiance_samples / NUM_SAMPLES; // Report the average of the samples we gathered
+  Serial.print("Irradiance: ");
+  Serial.println(irad_1_cnts);
+
   // Sensor sampling loop; Temperature
   // Grab 100 samples; samples every 100us
   float temp_samples_1 = 0;
@@ -276,20 +289,6 @@ void read_sensors()
   Serial.println(temp_3_temp);
   Serial.print("Temp 4: ");
   Serial.println(temp_4_temp);
-
-
-  // Sensor sampling loop; Irradiance
-  // Grab 100 samples; samples every 100us
-  long irradiance_samples = 0;
-  for (int i = 0; i < NUM_SAMPLES; i++)
-  {
-    // irradiance_samples += ads.readADC_SingleEnded(0);
-
-    delayMicroseconds(100);
-  }
-  irad_1_cnts = irradiance_samples / NUM_SAMPLES; // Report the average of the samples we gathered
-  Serial.print("Irradiance: ");
-  Serial.println(irad_1_cnts);
 
   // Sensor sampling loop; Temperature and Humidity
   // Grab 100 samples; samples every 100us

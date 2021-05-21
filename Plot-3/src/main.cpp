@@ -194,6 +194,19 @@ time_t get_ntp_time()
 void read_sensors()
 {
 
+  // Sensor sampling loop; Irradiance
+  // Grab 100 samples; samples every 100us
+  long irradiance_samples = 0;
+  for (int i = 0; i < NUM_SAMPLES; i++)
+  {
+    irradiance_samples += ads.readADC_SingleEnded(0);
+
+    delayMicroseconds(100);
+  }
+  irad_2_cnts = irradiance_samples / NUM_SAMPLES; // Report the average of the samples we gathered
+  Serial.print("Irradiance: ");
+  Serial.println(irad_2_cnts);
+
   // Sensor sampling loop; Temperature
   // Grab 100 samples; samples every 100us
   float temp_samples_1 = 0;
@@ -217,20 +230,6 @@ void read_sensors()
   Serial.println(temp_6_temp);
   Serial.print("Temp 3: ");
   Serial.println(temp_7_temp);
-
-
-  // Sensor sampling loop; Irradiance
-  // Grab 100 samples; samples every 100us
-  long irradiance_samples = 0;
-  for (int i = 0; i < NUM_SAMPLES; i++)
-  {
-    irradiance_samples += ads.readADC_SingleEnded(0);
-
-    delayMicroseconds(100);
-  }
-  irad_2_cnts = irradiance_samples / NUM_SAMPLES; // Report the average of the samples we gathered
-  Serial.print("Irradiance: ");
-  Serial.println(irad_2_cnts);
 
 }
 
