@@ -88,7 +88,7 @@ DallasTemperature temp_sensors(&oneWire);
 
 Adafruit_ADS1115 ads;
 
-static char date_string[24];
+static char date_string[23];
 static char file_name[12];
 
 File log_file;
@@ -165,7 +165,7 @@ void loop() {
     ThingSpeak.setField(IRAD_2_CNTS_FIELD, irad_2_cnts);
     Serial.println(ThingSpeak.writeFields(PLOT_3_PV_CHANNEL, plot_3_pv_api_key));
     time_t t = now();
-    sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT,", year(t), month(t), day(t), hour(t), minute(t), second(t));
+    sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT", year(t), month(t), day(t), hour(t), minute(t), second(t));
     log_file.print(date_string);
     log_file.print(",");
     log_file.print(temp_5_temp);

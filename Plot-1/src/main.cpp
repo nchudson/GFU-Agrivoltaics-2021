@@ -88,7 +88,7 @@ DallasTemperature temp_sensors(&oneWire);
 Adafruit_AM2315 am2315;
 Adafruit_ADS1115 ads;
 
-static const char date_string[24];
+static const char date_string[23];
 static const char file_name[12];
 
 File log_file;
@@ -176,8 +176,9 @@ void loop() {
     thingspeak_response = (ThingSpeak.writeFields(PLOT_1_ENV_CHANNEL, plot_1_env_api_key));
     Serial.println(thingspeak_response);
     time_t t = now();
-    sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT,", year(t), month(t), day(t), hour(t), minute(t), second(t));
+    sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT", year(t), month(t), day(t), hour(t), minute(t), second(t));
     log_file.print(date_string);
+    log_file.print(",");
     log_file.print(soil_0_volw);
     log_file.print(",");
     log_file.print(soil_2_sowp);

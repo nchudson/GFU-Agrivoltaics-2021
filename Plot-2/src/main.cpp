@@ -24,6 +24,7 @@
 #include <Adafruit_AM2315.h>
 #include <Time.h>
 #include <TimeLib.h>
+#include <avr/wdt.h>
 #include "secrets.h"
 
 //------------------------------------------------------------------------------
@@ -101,7 +102,7 @@ DallasTemperature temp_sensors(&oneWire);
 Adafruit_AM2315 am2315;
 Adafruit_ADS1115 ads;
 
-static const char date_string[24];
+static const char date_string[23];
 static const char file_name[12];
 
 File log_file;
@@ -126,6 +127,8 @@ float temp_2_temp;
 float temp_3_temp;
 float temp_4_temp;
 
+uint8_t relay_test = 0;
+
 //------------------------------------------------------------------------------
 //      __   __   __  ___  __  ___      __   ___  __
 //     |__) |__) /  \  |  /  \  |  \ / |__) |__  /__`
@@ -147,10 +150,13 @@ void create_log_file();
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
+  wdt_enable(WDTO_4S);
   Ethernet.begin(mac);
+  wdt_reset();
   Serial.println(Ethernet.localIP());
   ThingSpeak.begin(client);
   pinMode(7, OUTPUT);
+  digitalWrite(7, HIGH);
   udp.begin(2390);
   ntp.begin();
   ntp.update();
@@ -161,10 +167,10 @@ void setup() {
   Serial.println("Temp sensors initialized");
   Serial.print(temp_sensors.getDeviceCount());
   Serial.println(" sensors found");
-  // am2315.begin();
-  // Serial.println("Ambient temp sensor initialized");
-  // ads.begin();
-  // Serial.println("ADC initialized");
+  am2315.begin();
+  Serial.println("Ambient temp sensor initialized");
+  ads.begin();
+  Serial.println("ADC initialized");
 
   cur_time = now();
   Serial.println(ntp.getFormattedTime());
@@ -172,23 +178,31 @@ void setup() {
 
   SD.begin(SD_CS_PIN);
   create_log_file();
+  // relay_test = 1;
+  wdt_reset();
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
+  wdt_reset();
   prev_time = cur_time;
   cur_time = now();
 
-  if((hour(cur_time) != hour(prev_time)) && (hour(cur_time) >= 9 && hour(cur_time) <= 17)) {
-    Serial.println("Enabling loads");
-    digitalWrite(RELAY_TRIG_PIN, HIGH);
-    delay(100);
-    digitalWrite(RELAY_TRIG_PIN, LOW);
-  }
-
   if(minute(prev_time) != minute(cur_time)) {
+    if((minute(cur_time) == 0 && (hour(cur_time) >= 9 && hour(cur_time) <= 17)) || relay_test) {
+      Serial.println("Enabling loads");
+      digitalWrite(RELAY_TRIG_PIN, LOW);
+      delay(20);
+      digitalWrite(RELAY_TRIG_PIN, HIGH);
+      delay(20);
+      digitalWrite(RELAY_TRIG_PIN, LOW);
+      delay(20);
+      digitalWrite(RELAY_TRIG_PIN, HIGH);
+      relay_test = 0;
+    }
     Serial.println("Reading sensors");
     read_sensors();
+    wdt_reset();
     Serial.println("Sending data to ThingSpeak");
     ThingSpeak.setField(SOIL_1_VOLW_FIELD, soil_1_volw);
     ThingSpeak.setField(SOIL_3_SOWP_FIELD, soil_3_sowp);
@@ -202,8 +216,9 @@ void loop() {
     ThingSpeak.setField(TEMP_3_TEMP_FIELD, temp_3_temp);
     ThingSpeak.setField(TEMP_4_TEMP_FIELD, temp_4_temp);
     Serial.println(ThingSpeak.writeFields(PLOT_2_PV_CHANNEL, plot_2_pv_api_key));
+    wdt_reset();
     time_t t = now();
-    sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT,", year(t), month(t), day(t), hour(t), minute(t), second(t));
+    sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT", year(t), month(t), day(t), hour(t), minute(t), second(t));
     log_file.print(date_string);
     log_file.print(",");
     log_file.print(soil_1_volw);
@@ -239,6 +254,7 @@ void loop() {
 // Returns a time_t type... not sure what it is (time, presumably) just basing format off the example code
 time_t get_ntp_time()
 {
+  ntp.update();
   return ntp.getEpochTime(); // Return seconds since Jan. 1 1970, adjusted for time zone in seconds
 }
 
@@ -253,7 +269,7 @@ void read_sensors()
   long irradiance_samples = 0;
   for (int i = 0; i < NUM_SAMPLES; i++)
   {
-    // irradiance_samples += ads.readADC_SingleEnded(0);
+    irradiance_samples += ads.readADC_SingleEnded(0);
 
     delayMicroseconds(100);
   }
@@ -270,11 +286,11 @@ void read_sensors()
   for (int i = 0; i < NUM_SAMPLES; i++)
   {
     temp_sensors.requestTemperatures();
-    // temp_samples_1 += temp_sensors.getTempC(temp_1_addr);
+    temp_samples_1 += temp_sensors.getTempC(temp_1_addr);
     temp_samples_2 += temp_sensors.getTempC(temp_2_addr);
     temp_samples_3 += temp_sensors.getTempC(temp_3_addr);
     temp_samples_4 += temp_sensors.getTempC(temp_4_addr);
-    
+    wdt_reset();
     delayMicroseconds(100);
   }
   temp_1_temp = temp_samples_1 / NUM_SAMPLES; // Report the average of the samples we gathered
@@ -300,7 +316,7 @@ void read_sensors()
     am2315.readTemperatureAndHumidity(&amb_temp, &amb_hum); // Read temp & humidity
     amb_temp_samples += amb_temp;
     amb_hum_samples += amb_hum;
-
+    wdt_reset();
     delayMicroseconds(100);
   }
   tmph_1_humd = amb_hum_samples / NUM_SAMPLES; // Report the average of the samples we gathered
