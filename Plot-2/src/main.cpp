@@ -203,20 +203,30 @@ void loop() {
     Serial.println("Reading sensors");
     read_sensors();
     wdt_reset();
-    Serial.println("Sending data to ThingSpeak");
-    ThingSpeak.setField(SOIL_1_VOLW_FIELD, soil_1_volw);
-    ThingSpeak.setField(SOIL_3_SOWP_FIELD, soil_3_sowp);
-    ThingSpeak.setField(TEMP_1_TEMP_FIELD, temp_1_temp);
-    ThingSpeak.setField(TMPH_1_TEMP_FIELD, tmph_1_temp);
-    ThingSpeak.setField(TMPH_1_HUMD_FIELD, tmph_1_humd);
-    ThingSpeak.setField(IRAD_1_CNTS_FIELD, irad_1_cnts);
-    ThingSpeak.setField(FLOW_1_TICK_FIELD, flow_1_tick);
-    Serial.println(ThingSpeak.writeFields(PLOT_2_ENV_CHANNEL, plot_2_env_api_key));
+
+    if(minute(cur_time) % 10 == 0) {
+      Serial.println("Sending environmental data to ThingSpeak");
+      ThingSpeak.setField(SOIL_1_VOLW_FIELD, soil_1_volw);
+      ThingSpeak.setField(SOIL_3_SOWP_FIELD, soil_3_sowp);
+      ThingSpeak.setField(TEMP_1_TEMP_FIELD, temp_1_temp);
+      ThingSpeak.setField(TMPH_1_TEMP_FIELD, tmph_1_temp);
+      ThingSpeak.setField(TMPH_1_HUMD_FIELD, tmph_1_humd);
+      ThingSpeak.setField(IRAD_1_CNTS_FIELD, irad_1_cnts);
+      ThingSpeak.setField(FLOW_1_TICK_FIELD, flow_1_tick);
+      Serial.println(ThingSpeak.writeFields(PLOT_2_ENV_CHANNEL, plot_2_env_api_key));
+    }
+
+    Serial.println("Sending PV data to ThingSpeak");
     ThingSpeak.setField(TEMP_2_TEMP_FIELD, temp_2_temp);
     ThingSpeak.setField(TEMP_3_TEMP_FIELD, temp_3_temp);
     ThingSpeak.setField(TEMP_4_TEMP_FIELD, temp_4_temp);
     Serial.println(ThingSpeak.writeFields(PLOT_2_PV_CHANNEL, plot_2_pv_api_key));
     wdt_reset();
+
+    if(minute(cur_time) == 0) {
+      create_log_file();
+    }
+
     time_t t = now();
     sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT", year(t), month(t), day(t), hour(t), minute(t), second(t));
     log_file.print(date_string);
@@ -241,9 +251,6 @@ void loop() {
     log_file.print(",");
     log_file.println(temp_4_temp);
     log_file.flush();
-    if(minute(cur_time) == 0) {
-      create_log_file();
-    }
   }
   Ethernet.maintain();
 
@@ -323,7 +330,7 @@ void read_sensors()
   tmph_1_temp = amb_temp_samples / NUM_SAMPLES; // Report the average of the samples we gathered
   Serial.print("Ambient Temp: ");
   Serial.println(tmph_1_temp);
-  Serial.println("Ambient Humidity: ");
+  Serial.print("Ambient Humidity: ");
   Serial.println(tmph_1_humd);
 
 }

@@ -4,8 +4,10 @@
 
 #include <Arduino.h>
 #include <OneWire.h>
+#include <DallasTemperature.h>
 
 OneWire onewire(2);   // sensor pin change if needed
+DallasTemperature sensors(&onewire);
 
 void setup()
 {
@@ -40,6 +42,12 @@ void loop()
     }
     Serial.println();
   }
+  sensors.begin();
+  sensors.requestTemperatures();
+  Serial.println(sensors.getTempCByIndex(0));
+  Serial.println(sensors.getTempCByIndex(1));
+  Serial.println(sensors.getTempCByIndex(2));
+
   
   while(1);
 }

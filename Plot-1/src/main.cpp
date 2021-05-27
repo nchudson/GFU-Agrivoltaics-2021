@@ -24,6 +24,7 @@
 #include <Adafruit_AM2315.h>
 #include <Time.h>
 #include <TimeLib.h>
+#include <avr/wdt.h>
 #include "secrets.h"
 
 //------------------------------------------------------------------------------
@@ -110,7 +111,7 @@ int16_t flow_0_tick;
 
 //------------------------------------------------------------------------------
 //      __   __   __  ___  __  ___      __   ___  __
-//     |__) |__) /  \  |  /  \  |  \ / |__) |__  /__`
+//      |__) |__) /  \  |  /  \  |  \ / |__) |__  /__`
 //     |    |  \ \__/  |  \__/  |   |  |    |___ .__/
 //
 //------------------------------------------------------------------------------
@@ -129,10 +130,11 @@ void create_log_file();
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
+  wdt_enable(WDTO_4S);
   Ethernet.begin(mac);
+  wdt_reset();
   Serial.println(Ethernet.localIP());
   ThingSpeak.begin(client);
-  pinMode(7, OUTPUT);
   udp.begin(2390);
   ntp.begin();
   ntp.update();
@@ -154,47 +156,55 @@ void setup() {
 
   SD.begin(SD_CS_PIN);
   create_log_file();
+  wdt_reset();
 
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
+  wdt_reset();
   prev_time = cur_time;
   cur_time = now();
 
   if(minute(prev_time) != minute(cur_time)) {
-    Serial.println("Reading sensors");
-    read_sensors();
-    Serial.println("Sending data to ThingSpeak");
-    ThingSpeak.setField(SOIL_0_VOLW_FIELD, soil_0_volw);
-    ThingSpeak.setField(SOIL_2_SOWP_FIELD, soil_2_sowp);
-    ThingSpeak.setField(TEMP_0_TEMP_FIELD, temp_0_temp);
-    ThingSpeak.setField(TMPH_0_TEMP_FIELD, tmph_0_temp);
-    ThingSpeak.setField(TMPH_0_HUMD_FIELD, tmph_0_humd);
-    ThingSpeak.setField(IRAD_0_CNTS_FIELD, irad_0_cnts);
-    ThingSpeak.setField(FLOW_0_TICK_FIELD, flow_0_tick);
-    thingspeak_response = (ThingSpeak.writeFields(PLOT_1_ENV_CHANNEL, plot_1_env_api_key));
-    Serial.println(thingspeak_response);
-    time_t t = now();
-    sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT", year(t), month(t), day(t), hour(t), minute(t), second(t));
-    log_file.print(date_string);
-    log_file.print(",");
-    log_file.print(soil_0_volw);
-    log_file.print(",");
-    log_file.print(soil_2_sowp);
-    log_file.print(",");
-    log_file.print(temp_0_temp);
-    log_file.print(",");
-    log_file.print(tmph_0_temp);
-    log_file.print(",");
-    log_file.print(tmph_0_humd);
-    log_file.print(",");
-    log_file.print(irad_0_cnts);
-    log_file.print(",");
-    log_file.println(flow_0_tick);
-    log_file.flush();
-    if(minute(cur_time) == 0) {
-      create_log_file();
+        Serial.println("Reading sensors");
+        read_sensors();
+        wdt_reset();
+    if(minute(cur_time) % 10 == 0) {
+      Serial.println("Sending environmental data to ThingSpeak");
+      ThingSpeak.setField(SOIL_0_VOLW_FIELD, soil_0_volw);
+      ThingSpeak.setField(SOIL_2_SOWP_FIELD, soil_2_sowp);
+      ThingSpeak.setField(TEMP_0_TEMP_FIELD, temp_0_temp);
+      ThingSpeak.setField(TMPH_0_TEMP_FIELD, tmph_0_temp);
+      ThingSpeak.setField(TMPH_0_HUMD_FIELD, tmph_0_humd);
+      ThingSpeak.setField(IRAD_0_CNTS_FIELD, irad_0_cnts);
+      ThingSpeak.setField(FLOW_0_TICK_FIELD, flow_0_tick);
+      thingspeak_response = (ThingSpeak.writeFields(PLOT_1_ENV_CHANNEL, plot_1_env_api_key));
+      Serial.println(thingspeak_response);
+      wdt_reset();
+
+      if(minute(cur_time) == 0) {
+        create_log_file();
+      }
+
+      time_t t = now();
+      sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT", year(t), month(t), day(t), hour(t), minute(t), second(t));
+      log_file.print(date_string);
+      log_file.print(",");
+      log_file.print(soil_0_volw);
+      log_file.print(",");
+      log_file.print(soil_2_sowp);
+      log_file.print(",");
+      log_file.print(temp_0_temp);
+      log_file.print(",");
+      log_file.print(tmph_0_temp);
+      log_file.print(",");
+      log_file.print(tmph_0_humd);
+      log_file.print(",");
+      log_file.print(irad_0_cnts);
+      log_file.print(",");
+      log_file.println(flow_0_tick);
+      log_file.flush();
     }
   }
   Ethernet.maintain();
@@ -205,6 +215,7 @@ void loop() {
 // Returns a time_t type... not sure what it is (time, presumably) just basing format off the example code
 time_t get_ntp_time()
 {
+  ntp.update();
   return ntp.getEpochTime(); // Return seconds since Jan. 1 1970, adjusted for time zone in seconds
 }
 
@@ -227,19 +238,6 @@ void read_sensors()
   Serial.print("Irradiance: ");
   Serial.println(irad_0_cnts);
 
-  // Sensor sampling loop; Irradiance
-  // Grab 100 samples; samples every 100us
-  long irradiance_samples_2 = 0;
-  for (int i = 0; i < NUM_SAMPLES; i++)
-  {
-    irradiance_samples_2 += ads.readADC_SingleEnded(1);
-
-    delayMicroseconds(100);
-  }
-  flow_0_tick = irradiance_samples_2 / NUM_SAMPLES; // Report the average of the samples we gathered
-  Serial.print("Irradiance: ");
-  Serial.println(flow_0_tick);
-
   // Sensor sampling loop; Temperature
   // Grab 100 samples; samples every 100us
   float temp_samples_1 = 0;
@@ -247,7 +245,7 @@ void read_sensors()
   {
     temp_sensors.requestTemperatures();
     temp_samples_1 += temp_sensors.getTempC(temp_0_addr);
-    
+    wdt_reset();
     delayMicroseconds(100);
   }
   temp_0_temp = temp_samples_1 / NUM_SAMPLES; // Report the average of the samples we gathered
@@ -264,14 +262,14 @@ void read_sensors()
     am2315.readTemperatureAndHumidity(&amb_temp, &amb_hum); // Read temp & humidity
     amb_temp_samples += amb_temp;
     amb_hum_samples += amb_hum;
-
+    wdt_reset();
     delayMicroseconds(100);
   }
   tmph_0_humd = amb_hum_samples / NUM_SAMPLES; // Report the average of the samples we gathered
   tmph_0_temp = amb_temp_samples / NUM_SAMPLES; // Report the average of the samples we gathered
   Serial.print("Ambient Temp: ");
   Serial.println(tmph_0_temp);
-  Serial.println("Ambient Humidity: ");
+  Serial.print("Ambient Humidity: ");
   Serial.println(tmph_0_humd);
 
 }
@@ -284,7 +282,7 @@ void create_log_file()
   time_t t = now();
 
   // Get the current time (MM/DD_HH) and use it as the file name
-  sprintf(file_name, "%02d%02d%02d.log", month(t), day(t), hour(t));
+  sprintf(file_name, "%02d-%02d_%02d.log", month(t), day(t), hour(t));
   log_file = SD.open(file_name, FILE_WRITE);
 
   if (!log_file)

@@ -24,6 +24,7 @@
 #include <Adafruit_AM2315.h>
 #include <Time.h>
 #include <TimeLib.h>
+#include <avr/wdt.h>
 #include "secrets.h"
 
 //------------------------------------------------------------------------------
@@ -41,7 +42,7 @@
 #define IRAD_2_CNTS_FIELD  (4)
 
 // Pin definitions
-#define ONE_WIRE_PIN       (48)
+#define ONE_WIRE_PIN       (2)
 #define SD_CS_PIN          (4)
 #define RELAY_TRIG_PIN     (7)
 
@@ -124,11 +125,11 @@ void create_log_file();
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
-  Serial.println("HEllo1");
+  wdt_enable(WDTO_4S);
   Ethernet.begin(mac);
+  wdt_reset();
   Serial.println(Ethernet.localIP());
   ThingSpeak.begin(client);
-  pinMode(7, OUTPUT);
   udp.begin(2390);
   ntp.begin();
   ntp.update();
@@ -148,22 +149,31 @@ void setup() {
 
   SD.begin(SD_CS_PIN);
   create_log_file();
+  wdt_reset();
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
+  wdt_reset();
   prev_time = cur_time;
   cur_time = now();
 
   if(minute(prev_time) != minute(cur_time)) {
     Serial.println("Reading sensors");
     read_sensors();
-    Serial.println("Sending data to ThingSpeak");
+    wdt_reset();
+    Serial.println("Sending PV data to ThingSpeak");
     ThingSpeak.setField(TEMP_5_TEMP_FIELD, temp_5_temp);
     ThingSpeak.setField(TEMP_6_TEMP_FIELD, temp_6_temp);
     ThingSpeak.setField(TEMP_7_TEMP_FIELD, temp_7_temp);
     ThingSpeak.setField(IRAD_2_CNTS_FIELD, irad_2_cnts);
     Serial.println(ThingSpeak.writeFields(PLOT_3_PV_CHANNEL, plot_3_pv_api_key));
+    wdt_reset();
+
+    if(minute(cur_time) == 0) {
+      create_log_file();
+    }
+
     time_t t = now();
     sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT", year(t), month(t), day(t), hour(t), minute(t), second(t));
     log_file.print(date_string);
@@ -185,6 +195,7 @@ void loop() {
 // Returns a time_t type... not sure what it is (time, presumably) just basing format off the example code
 time_t get_ntp_time()
 {
+  ntp.update();
   return ntp.getEpochTime(); // Return seconds since Jan. 1 1970, adjusted for time zone in seconds
 }
 
@@ -214,10 +225,11 @@ void read_sensors()
   float temp_samples_3 = 0;
   for (int i = 0; i < NUM_SAMPLES; i++)
   {
-    // temp_sensors.requestTemperatures();
-    // temp_samples_1 += temp_sensors.getTempC(temp_5_addr);
-    // temp_samples_2 += temp_sensors.getTempC(temp_6_addr);
-    // temp_samples_3 += temp_sensors.getTempC(temp_7_addr);
+    temp_sensors.requestTemperatures();
+    temp_samples_1 += temp_sensors.getTempC(temp_5_addr);
+    temp_samples_2 += temp_sensors.getTempC(temp_6_addr);
+    temp_samples_3 += temp_sensors.getTempC(temp_7_addr);
+    wdt_reset();
     
     delayMicroseconds(100);
   }
