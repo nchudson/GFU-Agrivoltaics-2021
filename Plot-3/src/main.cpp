@@ -35,25 +35,28 @@
 //------------------------------------------------------------------------------
 
 // ThingSpeak PV Fields
-#define NUM_FIELDS_PV      (3)
-#define TEMP_5_TEMP_FIELD  (1)
-#define TEMP_6_TEMP_FIELD  (2)
-#define TEMP_7_TEMP_FIELD  (3)
-#define IRAD_2_CNTS_FIELD  (4)
+#define NUM_FIELDS_PV       (3)
+#define TEMP_5_TEMP_FIELD   (1)
+#define TEMP_6_TEMP_FIELD   (2)
+#define TEMP_7_TEMP_FIELD   (3)
+#define IRAD_2_WSQM_FIELD   (4)
+
+#define THINGSPEAK_SUCCESS  (200)
+#define MAX_TRIES           (5)
 
 // Pin definitions
-#define ONE_WIRE_PIN       (2)
-#define SD_CS_PIN          (4)
-#define RELAY_TRIG_PIN     (7)
+#define ONE_WIRE_PIN        (2)
+#define SD_CS_PIN           (4)
+#define RELAY_TRIG_PIN      (7)
 
 // Sensor parameters
-#define TEMP_PRECISION     (12)
+#define TEMP_PRECISION      (12)
 
 // Program parameters
-#define TIME_ZONE          (-7)
-#define SECS_PER_HOUR      (3600)
-#define NUM_SAMPLES        (20)
-#define NTP_SYNC_INTERVAL  (600)
+#define TIME_ZONE           (-7)
+#define SECS_PER_HOUR       (3600)
+#define NUM_SAMPLES         (20)
+#define NTP_SYNC_INTERVAL   (600)
 
 //------------------------------------------------------------------------------
 //     ___      __   ___  __   ___  ___  __
@@ -102,7 +105,7 @@ float temp_5_temp;
 float temp_6_temp;
 float temp_7_temp;
 
-int16_t irad_2_cnts;
+int16_t irad_2_wsqm;
 
 //------------------------------------------------------------------------------
 //      __   __   __  ___  __  ___      __   ___  __
@@ -163,12 +166,17 @@ void loop() {
     read_sensors();
     wdt_reset();
     Serial.println("Sending PV data to ThingSpeak");
-    ThingSpeak.setField(TEMP_5_TEMP_FIELD, temp_5_temp);
-    ThingSpeak.setField(TEMP_6_TEMP_FIELD, temp_6_temp);
-    ThingSpeak.setField(TEMP_7_TEMP_FIELD, temp_7_temp);
-    ThingSpeak.setField(IRAD_2_CNTS_FIELD, irad_2_cnts);
-    Serial.println(ThingSpeak.writeFields(PLOT_3_PV_CHANNEL, plot_3_pv_api_key));
-    wdt_reset();
+    thingspeak_response = 0;
+    for(uint8_t i = 0; i < MAX_TRIES && thingspeak_response != THINGSPEAK_SUCCESS; i++) {
+      ThingSpeak.setField(TEMP_5_TEMP_FIELD, temp_5_temp);
+      ThingSpeak.setField(TEMP_6_TEMP_FIELD, temp_6_temp);
+      ThingSpeak.setField(TEMP_7_TEMP_FIELD, temp_7_temp);
+      ThingSpeak.setField(IRAD_2_WSQM_FIELD, irad_2_wsqm);
+      thingspeak_response = ThingSpeak.writeFields(PLOT_3_PV_CHANNEL, plot_3_pv_api_key);
+      Serial.println(thingspeak_response);
+      wdt_reset();
+      delay(100);
+    }
 
     if(minute(cur_time) == 0) {
       create_log_file();
@@ -184,7 +192,7 @@ void loop() {
     log_file.print(",");
     log_file.print(temp_7_temp);
     log_file.print(",");
-    log_file.println(irad_2_cnts);
+    log_file.println(irad_2_wsqm);
     log_file.flush();
   }
   Ethernet.maintain();
@@ -214,9 +222,10 @@ void read_sensors()
 
     delayMicroseconds(100);
   }
-  irad_2_cnts = irradiance_samples / NUM_SAMPLES; // Report the average of the samples we gathered
+  irad_2_wsqm = irradiance_samples / NUM_SAMPLES; // Report the average of the samples we gathered
+  // irad_2_wsqm = (0.5458 * irad_2_wsqm) - 100.59;
   Serial.print("Irradiance: ");
-  Serial.println(irad_2_cnts);
+  Serial.println(irad_2_wsqm);
 
   // Sensor sampling loop; Temperature
   // Grab 100 samples; samples every 100us

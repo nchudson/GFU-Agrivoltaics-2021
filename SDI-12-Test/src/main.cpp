@@ -15,6 +15,9 @@ void setup() {
   Serial.println("Opening SDI-12 bus");
   sdi.begin();
   Serial.println("Opening successful");
+
+  // sdi.sendCommand("0A1!");
+  // Serial.println(sdi.readStringUntil('\n'));
 }
 
 void loop() {

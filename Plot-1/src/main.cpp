@@ -22,6 +22,7 @@
 #include <SD.h>
 #include <Adafruit_ADS1X15.h>
 #include <Adafruit_AM2315.h>
+#include <SDI12.h>
 #include <Time.h>
 #include <TimeLib.h>
 #include <avr/wdt.h>
@@ -35,28 +36,32 @@
 //------------------------------------------------------------------------------
 
 // ThingSpeak Environmental Fields
-#define NUM_FIELDS_ENV     (7)
-#define SOIL_0_VOLW_FIELD  (1)
-#define SOIL_2_SOWP_FIELD  (2)
-#define TEMP_0_TEMP_FIELD  (3)
-#define TMPH_0_TEMP_FIELD  (4)
-#define TMPH_0_HUMD_FIELD  (5)
-#define IRAD_0_CNTS_FIELD  (6)
-#define FLOW_0_TICK_FIELD  (7)
+#define NUM_FIELDS_ENV      (7)
+#define SOIL_0_VOLW_FIELD   (1)
+#define SOIL_0_TEMP_FIELD   (2)
+#define TEMP_0_TEMP_FIELD   (3)
+#define TMPH_0_TEMP_FIELD   (4)
+#define TMPH_0_HUMD_FIELD   (5)
+#define IRAD_0_WSQM_FIELD   (6)
+#define SOIL_2_SOWP_FIELD   (7)
+
+#define MAX_TRIES           (5)
+#define THINGSPEAK_SUCCESS  (200)
 
 // Pin definitions
-#define ONE_WIRE_PIN       (2)
-#define SD_CS_PIN          (4)
-#define RELAY_TRIG_PIN     (7)
+#define ONE_WIRE_PIN        (2)
+#define SD_CS_PIN           (4)
+#define RELAY_TRIG_PIN      (7)
+#define SDI_12_PIN          (62)
 
 // Sensor parameters
-#define TEMP_PRECISION     (12)
+#define TEMP_PRECISION      (12)
 
 // Program parameters
-#define TIME_ZONE          (-7)
-#define SECS_PER_HOUR      (3600)
-#define NUM_SAMPLES        (20)
-#define NTP_SYNC_INTERVAL  (600)
+#define TIME_ZONE           (-7)
+#define SECS_PER_HOUR       (3600)
+#define NUM_SAMPLES         (20)
+#define NTP_SYNC_INTERVAL   (600)
 
 //------------------------------------------------------------------------------
 //     ___      __   ___  __   ___  ___  __
@@ -85,6 +90,7 @@ DeviceAddress temp_0_addr = {TEMP_0_ADDR_0, TEMP_0_ADDR_1, TEMP_0_ADDR_2,
 
 OneWire oneWire(ONE_WIRE_PIN);
 DallasTemperature temp_sensors(&oneWire);
+SDI12 sdi(SDI_12_PIN);
 
 Adafruit_AM2315 am2315;
 Adafruit_ADS1115 ads;
@@ -97,15 +103,17 @@ File log_file;
 time_t cur_time;
 time_t prev_time;
 
-float soil_0_volw;
-float soil_2_sowp;
+double soil_0_volw;
+double soil_2_sowp;
+
+float soil_0_temp;
 
 float temp_0_temp;
 
 float tmph_0_temp;
 float tmph_0_humd;
 
-int16_t irad_0_cnts;
+int16_t irad_0_wsqm;
 
 int16_t flow_0_tick;
 
@@ -119,6 +127,8 @@ int16_t flow_0_tick;
 time_t get_ntp_time();
 void read_sensors();
 void create_log_file();
+bool teros_12_read(double *vwc, float *temp, uint16_t *conductivity);
+bool teros_21_read(double *matric_potential, float *temp);
 
 //------------------------------------------------------------------------------
 //      __        __          __
@@ -130,16 +140,19 @@ void create_log_file();
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
+  Serial.println("Hello!");
   wdt_enable(WDTO_4S);
   Ethernet.begin(mac);
   wdt_reset();
   Serial.println(Ethernet.localIP());
+  Serial.println(Ethernet.linkStatus());
   ThingSpeak.begin(client);
   udp.begin(2390);
   ntp.begin();
   ntp.update();
   setSyncProvider(get_ntp_time);
   setSyncInterval(NTP_SYNC_INTERVAL);
+  wdt_reset();
 
   temp_sensors.begin();
   Serial.println("Temp sensors initialized");
@@ -149,10 +162,13 @@ void setup() {
   Serial.println("Ambient temp sensor initialized");
   ads.begin();
   Serial.println("ADC initialized");
+  sdi.begin();
+  Serial.println("SDI-12 bus initialized");
 
   cur_time = now();
   Serial.println(ntp.getFormattedTime());
   prev_time = now();
+  wdt_reset();
 
   SD.begin(SD_CS_PIN);
   create_log_file();
@@ -167,21 +183,31 @@ void loop() {
   cur_time = now();
 
   if(minute(prev_time) != minute(cur_time)) {
-        Serial.println("Reading sensors");
-        read_sensors();
-        wdt_reset();
+    Serial.println("Reading sensors");
+    read_sensors();
+    wdt_reset();
+    Serial.println(Ethernet.linkStatus());
+    Serial.println(Ethernet.hardwareStatus());
     if(minute(cur_time) % 10 == 0) {
       Serial.println("Sending environmental data to ThingSpeak");
-      ThingSpeak.setField(SOIL_0_VOLW_FIELD, soil_0_volw);
-      ThingSpeak.setField(SOIL_2_SOWP_FIELD, soil_2_sowp);
-      ThingSpeak.setField(TEMP_0_TEMP_FIELD, temp_0_temp);
-      ThingSpeak.setField(TMPH_0_TEMP_FIELD, tmph_0_temp);
-      ThingSpeak.setField(TMPH_0_HUMD_FIELD, tmph_0_humd);
-      ThingSpeak.setField(IRAD_0_CNTS_FIELD, irad_0_cnts);
-      ThingSpeak.setField(FLOW_0_TICK_FIELD, flow_0_tick);
-      thingspeak_response = (ThingSpeak.writeFields(PLOT_1_ENV_CHANNEL, plot_1_env_api_key));
-      Serial.println(thingspeak_response);
-      wdt_reset();
+      thingspeak_response = 0;
+      for(uint8_t i = 0; i < MAX_TRIES && thingspeak_response != THINGSPEAK_SUCCESS; i++) {
+        wdt_reset();
+        ThingSpeak.setField(SOIL_0_VOLW_FIELD, (float)soil_0_volw);
+        ThingSpeak.setField(SOIL_0_TEMP_FIELD, soil_0_temp);
+        ThingSpeak.setField(TEMP_0_TEMP_FIELD, temp_0_temp);
+        ThingSpeak.setField(TMPH_0_TEMP_FIELD, tmph_0_temp);
+        ThingSpeak.setField(TMPH_0_HUMD_FIELD, tmph_0_humd);
+        ThingSpeak.setField(IRAD_0_WSQM_FIELD, irad_0_wsqm);
+        ThingSpeak.setField(SOIL_2_SOWP_FIELD, (float)soil_2_sowp);
+        wdt_reset();
+        // wdt_disable();
+        thingspeak_response = ThingSpeak.writeFields(PLOT_1_ENV_CHANNEL, plot_1_env_api_key);
+        Serial.println(thingspeak_response);
+        // wdt_enable(WDTO_4S);
+        wdt_reset();
+        delay(100);
+      }
 
       if(minute(cur_time) == 0) {
         create_log_file();
@@ -193,7 +219,7 @@ void loop() {
       log_file.print(",");
       log_file.print(soil_0_volw);
       log_file.print(",");
-      log_file.print(soil_2_sowp);
+      log_file.print(soil_0_temp);
       log_file.print(",");
       log_file.print(temp_0_temp);
       log_file.print(",");
@@ -201,9 +227,9 @@ void loop() {
       log_file.print(",");
       log_file.print(tmph_0_humd);
       log_file.print(",");
-      log_file.print(irad_0_cnts);
+      log_file.print(irad_0_wsqm);
       log_file.print(",");
-      log_file.println(flow_0_tick);
+      log_file.println(soil_2_sowp);
       log_file.flush();
     }
   }
@@ -234,23 +260,39 @@ void read_sensors()
 
     delayMicroseconds(100);
   }
-  irad_0_cnts = irradiance_samples / NUM_SAMPLES; // Report the average of the samples we gathered
+  irad_0_wsqm = irradiance_samples / NUM_SAMPLES; // Report the average of the samples we gathered
+  // irad_0_wsqm = (0.7423 * irad_0_wsqm) - 370.54; // Convert ADC counts to W/m^2.
   Serial.print("Irradiance: ");
-  Serial.println(irad_0_cnts);
+  Serial.println(irad_0_wsqm);
 
-  // Sensor sampling loop; Temperature
-  // Grab 100 samples; samples every 100us
-  float temp_samples_1 = 0;
-  for (int i = 0; i < NUM_SAMPLES; i++)
-  {
-    temp_sensors.requestTemperatures();
-    temp_samples_1 += temp_sensors.getTempC(temp_0_addr);
-    wdt_reset();
-    delayMicroseconds(100);
+  // Sensor sampling; Soil stuff
+  // Only use one sample for these because they're fancy
+  uint16_t conductivity;
+  float temp_12, temp_21;
+  double vwc_counts, matric_potential;
+  wdt_reset();
+  if(teros_12_read(&vwc_counts, &temp_12, &conductivity)) {
+    soil_0_volw = (0.0003879 * vwc_counts) - 0.6956;
+    soil_0_temp = temp_12;
+    Serial.print("Soil VWC: ");
+    Serial.println(soil_0_volw);
+    Serial.print("Soil Temp: ");
+    Serial.println(soil_0_temp);
   }
-  temp_0_temp = temp_samples_1 / NUM_SAMPLES; // Report the average of the samples we gathered
-  Serial.print("Temp 0: ");
-  Serial.println(temp_0_temp);
+  else {
+    Serial.println("TEROS-12 Error!");
+  }
+  wdt_reset();
+
+  if(teros_21_read(&matric_potential, &temp_21)) {
+    soil_2_sowp = matric_potential;
+    Serial.print("Soil Matric Potential: ");
+    Serial.println(soil_2_sowp);
+  }
+  else {
+    Serial.println("TEROS-21 Error!");
+  }
+  wdt_reset();
 
   // Sensor sampling loop; Temperature and Humidity
   // Grab 100 samples; samples every 100us
@@ -271,6 +313,21 @@ void read_sensors()
   Serial.println(tmph_0_temp);
   Serial.print("Ambient Humidity: ");
   Serial.println(tmph_0_humd);
+
+
+  // Sensor sampling loop; Temperature
+  // Grab 100 samples; samples every 100us
+  float temp_samples_1 = 0;
+  for (int i = 0; i < NUM_SAMPLES; i++)
+  {
+    temp_sensors.requestTemperatures();
+    temp_samples_1 += temp_sensors.getTempC(temp_0_addr);
+    wdt_reset();
+    delayMicroseconds(100);
+  }
+  temp_0_temp = temp_samples_1 / NUM_SAMPLES; // Report the average of the samples we gathered
+  Serial.print("Temp 0: ");
+  Serial.println(temp_0_temp);
 
 }
 
@@ -298,4 +355,82 @@ void create_log_file()
     Serial.println("'");
   }
   log_file.println("created_at,entry_id,field1,field2,field3,field4,field5,field6,field7");
+}
+
+bool teros_12_read(double *vwc_counts, float *temp, uint16_t *conductivity) {
+  bool valid = false;
+  bool temp_neg = true;
+  static char* input = (char*)malloc(25 * sizeof(char));
+  sdi.clearBuffer();
+  sdi.sendCommand("0M!");
+  delay(100);
+  if(sdi.available() > 5) {
+    delay(900);
+    sdi.clearBuffer();
+    sdi.sendCommand("0D0!");
+    while(sdi.available() < 10) ;
+    size_t str_size = sdi.readBytesUntil('\n', input, 25);
+    input[str_size] = 0;
+    while(*input == 0) {
+      input++;
+      str_size--;
+    }
+    char* temp_str = strchr(input, '-');
+    char* vwc_str = strchr(input, '+');
+    char* cond_str = strrchr(input, '+');
+    if(vwc_str && cond_str) {
+      valid = true;
+      vwc_str++;
+      *cond_str = 0;
+      cond_str++;
+      if(!temp_str) {
+        temp_str = strchr(vwc_str, '+');
+        temp_neg = false;
+      }
+      *temp_str = 0;
+      temp_str++;
+      *vwc_counts = atof(vwc_str);
+      *temp = temp_neg? atof(temp_str) * -1 : atof(temp_str);
+      *conductivity = atoi(cond_str);
+    }
+  }
+  sdi.clearBuffer();
+  return valid;
+}
+
+bool teros_21_read(double *matric_potential, float *temp) {
+  bool valid = false;
+  bool temp_neg = false;
+  static char* input = (char*)malloc(25 * sizeof(char));
+  sdi.clearBuffer();
+  sdi.sendCommand("1M!");
+  delay(100);
+  if(sdi.available() > 5) {
+    delay(900);
+    sdi.clearBuffer();
+    sdi.sendCommand("1D0!");
+    while(sdi.available() < 10) ;
+    size_t str_size = sdi.readBytesUntil('\n', input, 25);
+    input[str_size] = 0;
+    while(*input == 0) {
+      input++;
+      str_size--;
+    }
+    char* mtc_pot_str = strchr(input, '-');
+    char* temp_str = strchr(input, '+');
+    if(mtc_pot_str) {
+      valid = true;
+      mtc_pot_str++;
+      if(!temp_str) {
+        temp_str = strrchr(input, '-');
+        temp_neg = true;
+      }
+      *temp_str = 0;
+      temp_str++;
+      *matric_potential = atof(mtc_pot_str) * -1;
+      *temp = temp_neg? atof(temp_str) * -1 : atof(temp_str);
+    }
+  }
+  sdi.clearBuffer();
+  return valid;
 }
