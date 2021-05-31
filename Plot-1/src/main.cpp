@@ -35,6 +35,17 @@
 //
 //------------------------------------------------------------------------------
 
+#define IRAD_UPDATE_TIME    (100)
+#define TMPH_UPDATE_TIME    (500)
+#define TR12_UPDATE_TIME    (60000)
+#define TR21_UPDATE_TIME    (60000)
+#define TEMP_UPDATE_TIME    (2000)
+
+#define IRAD_MINUTE_BUF     (60000 / IRAD_UPDATE_TIME)
+#define TMPH_MINUTE_BUF     (60000 / TMPH_UPDATE_TIME)
+#define TEMP_MINUTE_BUF     (60000 / TEMP_UPDATE_TIME)
+
+
 // ThingSpeak Environmental Fields
 #define NUM_FIELDS_ENV      (7)
 #define SOIL_0_VOLW_FIELD   (1)
@@ -63,12 +74,23 @@
 #define NUM_SAMPLES         (20)
 #define NTP_SYNC_INTERVAL   (600)
 
+#define 
+
 //------------------------------------------------------------------------------
 //     ___      __   ___  __   ___  ___  __
 //      |  \ / |__) |__  |  \ |__  |__  /__`
 //      |   |  |    |___ |__/ |___ |    .__/
 //
 //------------------------------------------------------------------------------
+
+typedef enum {
+  TIMER_IRAD,
+  TIMER_TMPH,
+  TIMER_TR12,
+  TIMER_TR21,
+  TIMER_TEMP,
+  NUM_TIMERS
+} timers_t;
 
 //------------------------------------------------------------------------------
 //                __          __        ___  __
@@ -84,6 +106,8 @@ EthernetClient client;
 EthernetUDP udp;
 NTPClient ntp(udp, TIME_ZONE * SECS_PER_HOUR);
 int32_t thingspeak_response = 0;
+uint32_t delta = 0;
+uint32_t timers[NUM_TIMERS];
 uint16_t num_tries = 0;
 DeviceAddress temp_0_addr = {TEMP_0_ADDR_0, TEMP_0_ADDR_1, TEMP_0_ADDR_2,
   TEMP_0_ADDR_3, TEMP_0_ADDR_4, TEMP_0_ADDR_5, TEMP_0_ADDR_6, TEMP_0_ADDR_7};
@@ -181,6 +205,11 @@ void loop() {
   wdt_reset();
   prev_time = cur_time;
   cur_time = now();
+
+  delta = millis() - timers[TIMER_IRAD];
+  if (delta > IRAD_UPDATE_TIME) {
+
+  }
 
   if(minute(prev_time) != minute(cur_time)) {
     Serial.println("Reading sensors");
