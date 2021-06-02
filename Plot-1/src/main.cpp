@@ -183,12 +183,16 @@ void loop() {
   cur_time = now();
 
   if(minute(prev_time) != minute(cur_time)) {
+    if(minute(cur_time) == 0) {
+      create_log_file();
+    }
+
     Serial.println("Reading sensors");
     read_sensors();
     wdt_reset();
     Serial.println(Ethernet.linkStatus());
     Serial.println(Ethernet.hardwareStatus());
-    if(minute(cur_time) % 10 == 0) {
+    // if(minute(cur_time) % 10 == 0) {
       Serial.println("Sending environmental data to ThingSpeak");
       thingspeak_response = 0;
       for(uint8_t i = 0; i < MAX_TRIES && thingspeak_response != THINGSPEAK_SUCCESS; i++) {
@@ -209,9 +213,6 @@ void loop() {
         delay(100);
       }
 
-      if(minute(cur_time) == 0) {
-        create_log_file();
-      }
 
       time_t t = now();
       sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT", year(t), month(t), day(t), hour(t), minute(t), second(t));
@@ -231,7 +232,7 @@ void loop() {
       log_file.print(",");
       log_file.println(soil_2_sowp);
       log_file.flush();
-    }
+    // }
   }
   Ethernet.maintain();
 }

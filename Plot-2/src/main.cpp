@@ -35,6 +35,11 @@
 //
 //------------------------------------------------------------------------------
 
+
+// General ThingSpeak Parameters
+#define THINGSPEAK_SUCCESS  (200)
+#define THINGSPEAK_FAIL     (-301)
+
 // ThingSpeak Environmental Fields
 #define NUM_FIELDS_ENV      (7)
 #define SOIL_1_VOLW_FIELD   (1)
@@ -45,8 +50,6 @@
 #define IRAD_1_WSQM_FIELD   (6)
 #define SOIL_3_SOWP_FIELD   (7)
 
-#define MAX_TRIES           (5)
-#define THINGSPEAK_SUCCESS  (200)
 // ThingSpeak PV Fields
 #define NUM_FIELDS_PV       (3)
 #define TEMP_2_TEMP_FIELD   (1)
@@ -84,6 +87,7 @@
 
 static const uint8_t mac[] = {MAC_2_BYTE_0, MAC_2_BYTE_1, MAC_2_BYTE_2,
   MAC_2_BYTE_3, MAC_2_BYTE_4, MAC_2_BYTE_5};
+static IPAddress onedot(1, 1, 1, 1);
 EthernetClient client;
 EthernetUDP udp;
 NTPClient ntp(udp, TIME_ZONE * SECS_PER_HOUR);
@@ -145,6 +149,7 @@ void read_sensors();
 void create_log_file();
 bool teros_12_read(double *vwc, float *temp, uint16_t *conductivity);
 bool teros_21_read(double *matric_potential, float *temp);
+void system_reset();
 
 //------------------------------------------------------------------------------
 //      __        __          __
@@ -158,6 +163,7 @@ void setup() {
   Serial.begin(9600);
   wdt_enable(WDTO_4S);
   Ethernet.begin(mac);
+  Ethernet.setDnsServerIP(onedot);
   wdt_reset();
   Serial.println(Ethernet.localIP());
   ThingSpeak.begin(client);
@@ -196,6 +202,10 @@ void loop() {
   cur_time = now();
 
   if(minute(prev_time) != minute(cur_time)) {
+    if(minute(cur_time) == 0) {
+      create_log_file();
+    }
+
     if(minute(cur_time) == 0 && (hour(cur_time) >= 9 && hour(cur_time) <= 17)) {
       Serial.println("Enabling loads");
       digitalWrite(RELAY_TRIG_PIN, LOW);
@@ -209,40 +219,33 @@ void loop() {
     Serial.println("Reading sensors");
     read_sensors();
     wdt_reset();
+    Serial.println(Ethernet.linkStatus());
+    Serial.println(Ethernet.hardwareStatus());
 
     if(minute(cur_time) % 10 == 0) {
       Serial.println("Sending environmental data to ThingSpeak");
       thingspeak_response = 0;
-      for(uint8_t i = 0; i < MAX_TRIES && thingspeak_response != THINGSPEAK_SUCCESS; i++) {
-        ThingSpeak.setField(SOIL_1_VOLW_FIELD, (float)soil_1_volw);
-        ThingSpeak.setField(SOIL_1_TEMP_FIELD, soil_1_temp);
-        ThingSpeak.setField(TEMP_1_TEMP_FIELD, temp_1_temp);
-        ThingSpeak.setField(TMPH_1_TEMP_FIELD, tmph_1_temp);
-        ThingSpeak.setField(TMPH_1_HUMD_FIELD, tmph_1_humd);
-        ThingSpeak.setField(IRAD_1_WSQM_FIELD, irad_1_wsqm);
-        ThingSpeak.setField(SOIL_3_SOWP_FIELD, (float)soil_3_sowp);
-        thingspeak_response = ThingSpeak.writeFields(PLOT_2_ENV_CHANNEL, plot_2_env_api_key);
-        Serial.println(thingspeak_response);
-        wdt_reset();
-        delay(100);
-      }
+      ThingSpeak.setField(SOIL_1_VOLW_FIELD, (float)soil_1_volw);
+      ThingSpeak.setField(SOIL_1_TEMP_FIELD, soil_1_temp);
+      ThingSpeak.setField(TEMP_1_TEMP_FIELD, temp_1_temp);
+      ThingSpeak.setField(TMPH_1_TEMP_FIELD, tmph_1_temp);
+      ThingSpeak.setField(TMPH_1_HUMD_FIELD, tmph_1_humd);
+      ThingSpeak.setField(IRAD_1_WSQM_FIELD, irad_1_wsqm);
+      ThingSpeak.setField(SOIL_3_SOWP_FIELD, (float)soil_3_sowp);
+      thingspeak_response = ThingSpeak.writeFields(PLOT_2_ENV_CHANNEL, plot_2_env_api_key);
+      Serial.println(thingspeak_response);
+      if(thingspeak_response == THINGSPEAK_FAIL) system_reset();
     }
 
     Serial.println("Sending PV data to ThingSpeak");
     thingspeak_response = 0;
-    for(uint8_t i = 0; i < MAX_TRIES && thingspeak_response != THINGSPEAK_SUCCESS; i++) {
-      ThingSpeak.setField(TEMP_2_TEMP_FIELD, temp_2_temp);
-      ThingSpeak.setField(TEMP_3_TEMP_FIELD, temp_3_temp);
-      ThingSpeak.setField(TEMP_4_TEMP_FIELD, temp_4_temp);
-      thingspeak_response = ThingSpeak.writeFields(PLOT_2_PV_CHANNEL, plot_2_pv_api_key);
-      Serial.println(thingspeak_response);
-      wdt_reset();
-      delay(100);
-    }
+    ThingSpeak.setField(TEMP_2_TEMP_FIELD, temp_2_temp);
+    ThingSpeak.setField(TEMP_3_TEMP_FIELD, temp_3_temp);
+    ThingSpeak.setField(TEMP_4_TEMP_FIELD, temp_4_temp);
+    thingspeak_response = ThingSpeak.writeFields(PLOT_2_PV_CHANNEL, plot_2_pv_api_key);
+    Serial.println(thingspeak_response);
+    if(thingspeak_response == THINGSPEAK_FAIL) system_reset();
 
-    if(minute(cur_time) == 0) {
-      create_log_file();
-    }
 
     time_t t = now();
     sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT", year(t), month(t), day(t), hour(t), minute(t), second(t));
@@ -483,4 +486,10 @@ bool teros_21_read(double *matric_potential, float *temp) {
   }
   sdi.clearBuffer();
   return valid;
+}
+
+void system_reset() {
+  wdt_disable();
+  wdt_enable(WDTO_15MS);
+  while(1) ;
 }
