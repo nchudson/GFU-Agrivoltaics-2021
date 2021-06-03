@@ -222,6 +222,33 @@ void loop() {
     Serial.println(Ethernet.linkStatus());
     Serial.println(Ethernet.hardwareStatus());
 
+    wdt_reset();
+    time_t t = now();
+    sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT", year(t), month(t), day(t), hour(t), minute(t), second(t));
+    log_file.print(date_string);
+    log_file.print(",");
+    log_file.print(soil_1_volw);
+    log_file.print(",");
+    log_file.print(soil_1_temp);
+    log_file.print(",");
+    log_file.print(temp_1_temp);
+    log_file.print(",");
+    log_file.print(tmph_1_temp);
+    log_file.print(",");
+    log_file.print(tmph_1_humd);
+    log_file.print(",");
+    log_file.print(irad_1_wsqm);
+    log_file.print(",");
+    log_file.print(soil_3_sowp);
+    log_file.print(",");
+    log_file.print(temp_2_temp);
+    log_file.print(",");
+    log_file.print(temp_3_temp);
+    log_file.print(",");
+    log_file.println(temp_4_temp);
+    log_file.flush();
+    wdt_reset();
+
     if(minute(cur_time) % 10 == 0) {
       Serial.println("Sending environmental data to ThingSpeak");
       thingspeak_response = 0;
@@ -247,31 +274,13 @@ void loop() {
     if(thingspeak_response == THINGSPEAK_FAIL) system_reset();
 
 
-    time_t t = now();
-    sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT", year(t), month(t), day(t), hour(t), minute(t), second(t));
-    log_file.print(date_string);
-    log_file.print(",");
-    log_file.print(soil_1_volw);
-    log_file.print(",");
-    log_file.print(soil_1_temp);
-    log_file.print(",");
-    log_file.print(temp_1_temp);
-    log_file.print(",");
-    log_file.print(tmph_1_temp);
-    log_file.print(",");
-    log_file.print(tmph_1_humd);
-    log_file.print(",");
-    log_file.print(irad_1_wsqm);
-    log_file.print(",");
-    log_file.print(soil_3_sowp);
-    log_file.print(",");
-    log_file.print(temp_2_temp);
-    log_file.print(",");
-    log_file.print(temp_3_temp);
-    log_file.print(",");
-    log_file.println(temp_4_temp);
-    log_file.flush();
   }
+
+  if(second(cur_time) == 30 && second(prev_time) == 29) {
+    thingspeak_response = ThingSpeak.writeField(PLOT_2_DBG_CHANNEL, 1, 1, PLOT_2_DBG_API_KEY);
+    if(thingspeak_response == THINGSPEAK_FAIL) system_reset();
+  }
+
   Ethernet.maintain();
 
 }

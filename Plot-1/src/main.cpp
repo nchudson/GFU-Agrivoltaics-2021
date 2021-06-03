@@ -35,6 +35,10 @@
 //
 //------------------------------------------------------------------------------
 
+// General ThingSpeak Parameters
+#define THINGSPEAK_SUCCESS  (200)
+#define THINGSPEAK_FAIL     (-301)
+
 // ThingSpeak Environmental Fields
 #define NUM_FIELDS_ENV      (7)
 #define SOIL_0_VOLW_FIELD   (1)
@@ -44,9 +48,6 @@
 #define TMPH_0_HUMD_FIELD   (5)
 #define IRAD_0_WSQM_FIELD   (6)
 #define SOIL_2_SOWP_FIELD   (7)
-
-#define MAX_TRIES           (5)
-#define THINGSPEAK_SUCCESS  (200)
 
 // Pin definitions
 #define ONE_WIRE_PIN        (2)
@@ -118,9 +119,9 @@ int16_t irad_0_wsqm;
 int16_t flow_0_tick;
 
 //------------------------------------------------------------------------------
-//      __   __   __  ___  __  ___      __   ___  __
+//       __   __   __  ___  __  ___      __   ___  __
 //      |__) |__) /  \  |  /  \  |  \ / |__) |__  /__`
-//     |    |  \ \__/  |  \__/  |   |  |    |___ .__/
+//      |    |  \ \__/  |  \__/  |   |  |    |___ .__/
 //
 //------------------------------------------------------------------------------
 
@@ -129,6 +130,7 @@ void read_sensors();
 void create_log_file();
 bool teros_12_read(double *vwc, float *temp, uint16_t *conductivity);
 bool teros_21_read(double *matric_potential, float *temp);
+void system_reset();
 
 //------------------------------------------------------------------------------
 //      __        __          __
@@ -192,28 +194,25 @@ void loop() {
     wdt_reset();
     Serial.println(Ethernet.linkStatus());
     Serial.println(Ethernet.hardwareStatus());
-    // if(minute(cur_time) % 10 == 0) {
+    if(minute(cur_time) % 10 == 0) {
       Serial.println("Sending environmental data to ThingSpeak");
       thingspeak_response = 0;
-      for(uint8_t i = 0; i < MAX_TRIES && thingspeak_response != THINGSPEAK_SUCCESS; i++) {
-        wdt_reset();
-        ThingSpeak.setField(SOIL_0_VOLW_FIELD, (float)soil_0_volw);
-        ThingSpeak.setField(SOIL_0_TEMP_FIELD, soil_0_temp);
-        ThingSpeak.setField(TEMP_0_TEMP_FIELD, temp_0_temp);
-        ThingSpeak.setField(TMPH_0_TEMP_FIELD, tmph_0_temp);
-        ThingSpeak.setField(TMPH_0_HUMD_FIELD, tmph_0_humd);
-        ThingSpeak.setField(IRAD_0_WSQM_FIELD, irad_0_wsqm);
-        ThingSpeak.setField(SOIL_2_SOWP_FIELD, (float)soil_2_sowp);
-        wdt_reset();
-        // wdt_disable();
-        thingspeak_response = ThingSpeak.writeFields(PLOT_1_ENV_CHANNEL, plot_1_env_api_key);
-        Serial.println(thingspeak_response);
-        // wdt_enable(WDTO_4S);
-        wdt_reset();
-        delay(100);
-      }
+      wdt_reset();
+      ThingSpeak.setField(SOIL_0_VOLW_FIELD, (float)soil_0_volw);
+      ThingSpeak.setField(SOIL_0_TEMP_FIELD, soil_0_temp);
+      ThingSpeak.setField(TEMP_0_TEMP_FIELD, temp_0_temp);
+      ThingSpeak.setField(TMPH_0_TEMP_FIELD, tmph_0_temp);
+      ThingSpeak.setField(TMPH_0_HUMD_FIELD, tmph_0_humd);
+      ThingSpeak.setField(IRAD_0_WSQM_FIELD, irad_0_wsqm);
+      ThingSpeak.setField(SOIL_2_SOWP_FIELD, (float)soil_2_sowp);
+      wdt_reset();
+      thingspeak_response = ThingSpeak.writeFields(PLOT_1_ENV_CHANNEL, plot_1_env_api_key);
+      Serial.println(thingspeak_response);
+      wdt_reset();
 
 
+      wdt_reset();
+      Serial.println("Writing to card");
       time_t t = now();
       sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT", year(t), month(t), day(t), hour(t), minute(t), second(t));
       log_file.print(date_string);
@@ -232,8 +231,17 @@ void loop() {
       log_file.print(",");
       log_file.println(soil_2_sowp);
       log_file.flush();
-    // }
+      wdt_reset();
+
+      if(thingspeak_response == THINGSPEAK_FAIL) system_reset();
+    }
   }
+
+  if(second(cur_time) == 30 && second(prev_time) == 29) {
+    thingspeak_response = ThingSpeak.writeField(PLOT_1_DBG_CHANNEL, 1, 1, PLOT_1_DBG_API_KEY);
+    if(thingspeak_response == THINGSPEAK_FAIL) system_reset();
+  }
+
   Ethernet.maintain();
 }
 
@@ -434,4 +442,10 @@ bool teros_21_read(double *matric_potential, float *temp) {
   }
   sdi.clearBuffer();
   return valid;
+}
+
+void system_reset() {
+  wdt_disable();
+  wdt_enable(WDTO_15MS);
+  while(1) ;
 }

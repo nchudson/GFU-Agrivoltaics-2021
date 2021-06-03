@@ -34,6 +34,10 @@
 //
 //------------------------------------------------------------------------------
 
+// General ThingSpeak Parameters
+#define THINGSPEAK_SUCCESS  (200)
+#define THINGSPEAK_FAIL     (-301)
+
 // ThingSpeak PV Fields
 #define NUM_FIELDS_PV       (3)
 #define TEMP_5_TEMP_FIELD   (1)
@@ -41,8 +45,6 @@
 #define TEMP_7_TEMP_FIELD   (3)
 #define IRAD_2_WSQM_FIELD   (4)
 
-#define THINGSPEAK_SUCCESS  (200)
-#define MAX_TRIES           (5)
 
 // Pin definitions
 #define ONE_WIRE_PIN        (2)
@@ -117,6 +119,7 @@ int16_t irad_2_wsqm;
 time_t get_ntp_time();
 void read_sensors();
 void create_log_file();
+void system_reset();
 
 //------------------------------------------------------------------------------
 //      __        __          __
@@ -162,25 +165,23 @@ void loop() {
   cur_time = now();
 
   if(minute(prev_time) != minute(cur_time)) {
+    if(minute(cur_time) == 0) {
+      create_log_file();
+    }
+
     Serial.println("Reading sensors");
     read_sensors();
     wdt_reset();
     Serial.println("Sending PV data to ThingSpeak");
     thingspeak_response = 0;
-    for(uint8_t i = 0; i < MAX_TRIES && thingspeak_response != THINGSPEAK_SUCCESS; i++) {
-      ThingSpeak.setField(TEMP_5_TEMP_FIELD, temp_5_temp);
-      ThingSpeak.setField(TEMP_6_TEMP_FIELD, temp_6_temp);
-      ThingSpeak.setField(TEMP_7_TEMP_FIELD, temp_7_temp);
-      ThingSpeak.setField(IRAD_2_WSQM_FIELD, irad_2_wsqm);
-      thingspeak_response = ThingSpeak.writeFields(PLOT_3_PV_CHANNEL, plot_3_pv_api_key);
-      Serial.println(thingspeak_response);
-      wdt_reset();
-      delay(100);
-    }
+    ThingSpeak.setField(TEMP_5_TEMP_FIELD, temp_5_temp);
+    ThingSpeak.setField(TEMP_6_TEMP_FIELD, temp_6_temp);
+    ThingSpeak.setField(TEMP_7_TEMP_FIELD, temp_7_temp);
+    ThingSpeak.setField(IRAD_2_WSQM_FIELD, irad_2_wsqm);
+    thingspeak_response = ThingSpeak.writeFields(PLOT_3_PV_CHANNEL, plot_3_pv_api_key);
+    Serial.println(thingspeak_response);
+    wdt_reset();
 
-    if(minute(cur_time) == 0) {
-      create_log_file();
-    }
 
     time_t t = now();
     sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT", year(t), month(t), day(t), hour(t), minute(t), second(t));
@@ -194,6 +195,7 @@ void loop() {
     log_file.print(",");
     log_file.println(irad_2_wsqm);
     log_file.flush();
+    if(thingspeak_response == THINGSPEAK_FAIL) system_reset();
   }
   Ethernet.maintain();
 }
@@ -278,4 +280,10 @@ void create_log_file()
     Serial.println("'");
   }
   log_file.println("created_at,entry_id,field1,field2,field3,field4");
+}
+
+void system_reset() {
+  wdt_disable();
+  wdt_enable(WDTO_15MS);
+  while(1) ;
 }
