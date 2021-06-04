@@ -238,6 +238,7 @@ void loop() {
   }
 
   if(second(cur_time) == 30 && second(prev_time) == 29) {
+    wdt_reset();
     thingspeak_response = ThingSpeak.writeField(PLOT_1_DBG_CHANNEL, 1, 1, PLOT_1_DBG_API_KEY);
     if(thingspeak_response == THINGSPEAK_FAIL) system_reset();
   }
