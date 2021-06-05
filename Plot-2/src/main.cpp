@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-// GFU Agrivoltaics ThingSpeak Test
+// GFU Agrivoltaics Plot 2 (Shade Plot) Monitor
 // Nathaniel Hudson
 // nhudson18@georgefox.edu
 // Summer 2021
@@ -35,7 +35,6 @@
 //
 //------------------------------------------------------------------------------
 
-
 // General ThingSpeak Parameters
 #define THINGSPEAK_SUCCESS  (200)
 #define THINGSPEAK_FAIL     (-301)
@@ -56,23 +55,24 @@
 #define TEMP_3_TEMP_FIELD   (2)
 #define TEMP_4_TEMP_FIELD   (3)
 
-// Pin definitions
+// Pin Definitions
 #define ONE_WIRE_PIN        (2)
 #define SD_CS_PIN           (4)
 #define RELAY_TRIG_PIN      (7)
 #define SDI_12_PIN          (62)
 
-// Sensor parameters
+// Sensor Parameters
 #define TEMP_PRECISION      (12)
 
-// Program parameters
+// Program Parameters
 #define TIME_ZONE           (-7)
 #define SECS_PER_HOUR       (3600)
 #define NUM_SAMPLES         (20)
 #define NTP_SYNC_INTERVAL   (600)
 
-// Debug parameters
+// Debug Parameters
 #define FAIL_RESET
+#define THINGSPEAK_DEBUG
 
 //------------------------------------------------------------------------------
 //     ___      __   ___  __   ___  ___  __
@@ -88,16 +88,20 @@
 //
 //------------------------------------------------------------------------------
 
-// 
+// Network Variables
 static const uint8_t mac[] = {MAC_2_BYTE_0, MAC_2_BYTE_1, MAC_2_BYTE_2,
   MAC_2_BYTE_3, MAC_2_BYTE_4, MAC_2_BYTE_5};
 static IPAddress onedot(1, 1, 1, 1);
 EthernetClient client;
 EthernetUDP udp;
 NTPClient ntp(udp, TIME_ZONE * SECS_PER_HOUR);
-int32_t thingspeak_response = 0;
 const char* plot_2_env_api_key = PLOT_2_ENV_API_KEY;
 const char* plot_2_pv_api_key = PLOT_2_PV_API_KEY;
+int32_t thingspeak_response = 0;
+
+// Sensor Objects
+OneWire oneWire(ONE_WIRE_PIN);
+DallasTemperature temp_sensors(&oneWire);
 DeviceAddress temp_1_addr = {TEMP_1_ADDR_0, TEMP_1_ADDR_1, TEMP_1_ADDR_2,
   TEMP_1_ADDR_3, TEMP_1_ADDR_4, TEMP_1_ADDR_5, TEMP_1_ADDR_6, TEMP_1_ADDR_7};
 DeviceAddress temp_2_addr = {TEMP_2_ADDR_0, TEMP_2_ADDR_1, TEMP_2_ADDR_2,
@@ -107,8 +111,6 @@ DeviceAddress temp_3_addr = {TEMP_3_ADDR_0, TEMP_3_ADDR_1, TEMP_3_ADDR_2,
 DeviceAddress temp_4_addr = {TEMP_4_ADDR_0, TEMP_4_ADDR_1, TEMP_4_ADDR_2,
   TEMP_4_ADDR_3, TEMP_4_ADDR_4, TEMP_4_ADDR_5, TEMP_4_ADDR_6, TEMP_4_ADDR_7};
 
-OneWire oneWire(ONE_WIRE_PIN);
-DallasTemperature temp_sensors(&oneWire);
 SDI12 sdi(SDI_12_PIN);
 
 Adafruit_AM2315 am2315;
@@ -122,7 +124,7 @@ File log_file;
 time_t cur_time;
 time_t prev_time;
 
-// Sensor data
+// Sensor Data
 double soil_1_volw;
 double soil_3_sowp;
 
@@ -166,33 +168,36 @@ void system_reset();
 // Setup Routine
 //==============================================================================
 void setup() {
-  // Basic system setup
+  // Basic system setup.
   Serial.begin(9600);
-  // wdt_enable(WDTO_4S);
+  wdt_enable(WDTO_4S);
   pinMode(RELAY_TRIG_PIN, OUTPUT);
   digitalWrite(RELAY_TRIG_PIN, HIGH);
 
-  // Initialize internet connection
+  // Initialize internet connection.
   Ethernet.begin(mac);
+  #ifdef ONEDOT
   Ethernet.setDnsServerIP(onedot);
+  #endif
   Serial.println(Ethernet.localIP());
+  Serial.println(Ethernet.linkStatus());
   wdt_reset();
 
-  // Initialize ThingSpeak
+  // Initialize ThingSpeak.
   ThingSpeak.begin(client);
 
-  // Initialize NTP
+  // Initialize NTP.
   udp.begin(2390);
   ntp.begin();
   ntp.update();
   setSyncProvider(get_ntp_time);
   setSyncInterval(NTP_SYNC_INTERVAL);
   cur_time = now();
-  Serial.println(ntp.getFormattedTime());
   prev_time = now();
+  Serial.println(ntp.getFormattedTime());
   wdt_reset();
 
-  // Initialize sensors
+  // Initialize sensors.
   temp_sensors.begin();
   Serial.println("Temp sensors initialized");
   Serial.print(temp_sensors.getDeviceCount());
@@ -205,7 +210,7 @@ void setup() {
   Serial.println("SDI-12 bus initialized");
   wdt_reset();
 
-  // Initialize SD card
+  // Initialize SD card.
   SD.begin(SD_CS_PIN);
   create_log_file();
   wdt_reset();
@@ -245,6 +250,7 @@ void loop() {
     wdt_reset();
 
     // Log new sensor data to SD card, getting current time first.
+    Serial.println("Writing to card");
     time_t t = now();
     sprintf(date_string, "%04d-%02d-%02d %02d:%02d:%02d PDT",
       year(t), month(t), day(t), hour(t), minute(t), second(t));
@@ -294,8 +300,9 @@ void loop() {
       // Attempt ThingSpeak upload.
       Serial.println("Sending environmental data to ThingSpeak");
       thingspeak_response = ThingSpeak.writeFields(
-          PLOT_2_ENV_CHANNEL, plot_2_env_api_key);
+        PLOT_2_ENV_CHANNEL, plot_2_env_api_key);
       Serial.println(thingspeak_response);
+      wdt_reset();
 
       #ifdef FAIL_RESET
         // Reset system if -301 error encountered
@@ -310,8 +317,10 @@ void loop() {
 
     // Attempt ThingSpeak upload.
     Serial.println("Sending PV data to ThingSpeak");
-    thingspeak_response = ThingSpeak.writeFields(PLOT_2_PV_CHANNEL, plot_2_pv_api_key);
+    thingspeak_response = ThingSpeak.writeFields(
+      PLOT_2_PV_CHANNEL, plot_2_pv_api_key);
     Serial.println(thingspeak_response);
+    wdt_reset();
 
     #ifdef FAIL_RESET
       // Reset system if -301 error encountered
@@ -320,20 +329,22 @@ void loop() {
 
   }
 
+  #ifdef THINGSPEAK_DEBUG
   // If the 30th second of the minute has just begun,
   // write to debug channel
   if(second(cur_time) == 30 && second(prev_time) == 29) {
-    thingspeak_response = ThingSpeak.writeField(PLOT_2_DBG_CHANNEL, 1, 1, PLOT_2_DBG_API_KEY);
+    thingspeak_response = ThingSpeak.writeField(
+      PLOT_2_DBG_CHANNEL, 1, 1, PLOT_2_DBG_API_KEY);
 
     #ifdef FAIL_RESET
       // Reset system if -301 error encountered
       if(thingspeak_response == THINGSPEAK_FAIL) system_reset();
     #endif
   }
+  #endif
 
   // Maintain Ethernet connection.
   Ethernet.maintain();
-
 }
 
 // Provides the time library with the current real-world time
@@ -351,28 +362,29 @@ time_t get_ntp_time()
 //==============================================================================
 void read_sensors() {
 
-  // Sensor sampling loop; Irradiance
+  // Sensor sampling loop.
+  // Irradiance.
   int32_t irradiance_samples = 0;
-  for (int8_t i = 0; i < NUM_SAMPLES; i++)
-  {
+  for (uint8_t i = 0; i < NUM_SAMPLES; i++) {
     irradiance_samples += ads.readADC_SingleEnded(0);
-
     delayMicroseconds(100);
   }
 
-  // Report the average of the samples we gathered
+  // Report the average of the samples we gathered.
   irad_1_wsqm = irradiance_samples / NUM_SAMPLES;
   // irad_1_wsqm = (0.6433 * irad_1_wsqm) - 341.17; // Convert ADC counts to W/m^2.
   Serial.print("Irradiance: ");
   Serial.println(irad_1_wsqm);
 
-  // Sensor sampling; Soil stuff
+  // Sensor sampling.
+  // Soil stuff.
   // Only use one sample for these because they're fancy
   uint16_t conductivity;
   float temp_12, temp_21;
   double vwc_counts, matric_potential;
+  wdt_reset();
 
-  // Read from TEROS 12
+  // Read from TEROS 12.
   if(teros_12_read(&vwc_counts, &temp_12, &conductivity)) {
     // Convert ADC counts to volumetric water content using Equation 6 from
     // TEROS 12 user manual 4.1.1.
@@ -390,7 +402,6 @@ void read_sensors() {
   }
   wdt_reset();
 
-
   // Read from TEROS 21
   if(teros_21_read(&matric_potential, &temp_21)) {
     soil_3_sowp = matric_potential;
@@ -404,19 +415,18 @@ void read_sensors() {
 
   // Sensor sampling loop.
   // Ambient temperature and humidity.
-  float amb_hum_samples = 0;  
+  float amb_hum_samples = 0;
   float amb_temp_samples = 0;
   float amb_temp, amb_hum;
-  for (int8_t i = 0; i < NUM_SAMPLES; i++)
+  for (uint8_t i = 0; i < NUM_SAMPLES; i++)
   {
-    // Read 
     am2315.readTemperatureAndHumidity(&amb_temp, &amb_hum);
     amb_temp_samples += amb_temp;
     amb_hum_samples += amb_hum;
     wdt_reset();
     delayMicroseconds(100);
   }
-  // Report the average of the samples we gathered
+  // Report the average of the samples we gathered.
   tmph_1_humd = amb_hum_samples / NUM_SAMPLES;
   tmph_1_temp = amb_temp_samples / NUM_SAMPLES;
 
@@ -426,24 +436,24 @@ void read_sensors() {
   Serial.print("Ambient Humidity: ");
   Serial.println(tmph_1_humd);
 
-  // Sensor sampling loop
-  // One-inch soil temperature
+  // Sensor sampling loop.
+  // DS18B20 temperature.
   float temp_samples_1 = 0;
   float temp_samples_2 = 0;
   float temp_samples_3 = 0;
   float temp_samples_4 = 0;
-  for (int8_t i = 0; i < NUM_SAMPLES; i++)
-  {
+  for (uint8_t i = 0; i < NUM_SAMPLES; i++) {
     // Request temperatures from all sensors.
     temp_sensors.requestTemperatures();
-    // 
+
+    //Add to cumulative samples.
     temp_samples_1 += temp_sensors.getTempC(temp_1_addr);
     temp_samples_2 += temp_sensors.getTempC(temp_2_addr);
     temp_samples_3 += temp_sensors.getTempC(temp_3_addr);
     temp_samples_4 += temp_sensors.getTempC(temp_4_addr);
     wdt_reset();
   }
-  // Report the average of the samples we gathered
+  // Report the average of the samples we gathered.
   temp_1_temp = temp_samples_1 / NUM_SAMPLES;
   temp_2_temp = temp_samples_2 / NUM_SAMPLES;
   temp_3_temp = temp_samples_3 / NUM_SAMPLES;
@@ -458,7 +468,6 @@ void read_sensors() {
   Serial.println(temp_3_temp);
   Serial.print("Temp 4: ");
   Serial.println(temp_4_temp);
-
 }
 
 //==============================================================================
@@ -573,7 +582,7 @@ bool teros_12_read(double *vwc_counts, float *temp, uint16_t *conductivity) {
       *conductivity = atoi(cond_str);
     }
   }
-  
+
   // Clear SDI buffer once again, just for good measure.
   sdi.clearBuffer();
   return valid;
