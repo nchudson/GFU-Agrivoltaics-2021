@@ -364,15 +364,18 @@ void read_sensors() {
 
   // Sensor sampling loop.
   // Irradiance.
-  int32_t irradiance_samples = 0;
+  int32_t irad_samples = 0;
   for (uint8_t i = 0; i < NUM_SAMPLES; i++) {
-    irradiance_samples += ads.readADC_SingleEnded(0);
+    irad_samples += ads.readADC_SingleEnded(0);
     delayMicroseconds(100);
   }
 
   // Report the average of the samples we gathered.
-  irad_1_wsqm = irradiance_samples / NUM_SAMPLES;
-  // irad_1_wsqm = (0.6433 * irad_1_wsqm) - 341.17; // Convert ADC counts to W/m^2.
+  irad_1_wsqm = (irad_samples < 0) ? 0 : irad_samples / NUM_SAMPLES;
+  // Convert ADC counts to W/m^2.
+  irad_1_wsqm = (float)((-8E-10 * pow(irad_1_wsqm, 4)) +
+    (3E-6 * pow(irad_1_wsqm, 3)) - (3.02E-3 * pow(irad_1_wsqm, 2)) +
+    (1.1024 * (double)irad_1_wsqm));
   Serial.print("Irradiance: ");
   Serial.println(irad_1_wsqm);
 

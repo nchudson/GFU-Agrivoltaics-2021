@@ -62,7 +62,6 @@
 
 // Debug Parameters
 #define FAIL_RESET
-#define THINGSPEAK_DEBUG
 
 //------------------------------------------------------------------------------
 //     ___      __   ___  __   ___  ___  __
@@ -274,15 +273,18 @@ void read_sensors() {
 
   // Sensor sampling loop.
   // Irradiance.
-  int32_t irradiance_samples = 0;
+  int32_t irad_samples = 0;
   for (uint8_t i = 0; i < NUM_SAMPLES; i++) {
-    irradiance_samples += ads.readADC_SingleEnded(0);
+    irad_samples += ads.readADC_SingleEnded(0);
 
     delayMicroseconds(100);
   }
   // Report the average of the samples we gathered.
-  irad_2_wsqm = irradiance_samples / NUM_SAMPLES;
-  // irad_2_wsqm = (0.5458 * irad_2_wsqm) - 100.59;
+  irad_2_wsqm = (irad_samples < 0) ? 0 : irad_samples / NUM_SAMPLES;
+  // Convert ADC counts to W/m^2.
+  irad_2_wsqm = (float)((-6E-10 * pow(irad_2_wsqm, 4)) +
+    (2.7E-6 * pow(irad_2_wsqm, 3)) - (3.1E-3 * pow(irad_2_wsqm, 2)) +
+    (1.1 * (double)irad_2_wsqm));
   Serial.print("Irradiance: ");
   Serial.println(irad_2_wsqm);
 
