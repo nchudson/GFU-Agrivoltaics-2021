@@ -62,6 +62,7 @@
 
 // Debug Parameters
 #define FAIL_RESET
+#define THINGSPEAK_DEBUG
 
 //------------------------------------------------------------------------------
 //     ___      __   ___  __   ___  ___  __
@@ -281,6 +282,8 @@ void read_sensors() {
   }
   // Report the average of the samples we gathered.
   irad_2_wsqm = (irad_samples < 0) ? 0 : irad_samples / NUM_SAMPLES;
+  Serial.print("Irradiance ADC: ");
+  Serial.println(irad_2_wsqm);
   // Convert ADC counts to W/m^2.
   irad_2_wsqm = (float)((-6E-10 * pow(irad_2_wsqm, 4)) +
     (2.7E-6 * pow(irad_2_wsqm, 3)) - (3.1E-3 * pow(irad_2_wsqm, 2)) +
@@ -368,6 +371,7 @@ void system_reset() {
   Serial.println("//////////////////");
   Serial.println("// SYSTEM RESET //");
   Serial.println("//////////////////");
+  delay(100);
   wdt_enable(WDTO_15MS);
   while(1) ;
 }

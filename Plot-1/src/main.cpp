@@ -276,6 +276,7 @@ void loop() {
   // If the 30th second of the minute has just begun,
   // write to debug channel
   if(second(cur_time) == 30 && second(prev_time) == 29) {
+    if(minute(cur_time) == 5) system_reset();
     thingspeak_response = ThingSpeak.writeField(
       PLOT_1_DBG_CHANNEL, 1, 1, PLOT_1_DBG_API_KEY);
 
@@ -598,6 +599,7 @@ void system_reset() {
   Serial.println("//////////////////");
   Serial.println("// SYSTEM RESET //");
   Serial.println("//////////////////");
+  delay(100);
   wdt_enable(WDTO_15MS);
   while(1) ;
 }
