@@ -111,7 +111,6 @@ DeviceAddress temp_3_addr = {TEMP_3_ADDR_0, TEMP_3_ADDR_1, TEMP_3_ADDR_2,
 DeviceAddress temp_4_addr = {TEMP_4_ADDR_0, TEMP_4_ADDR_1, TEMP_4_ADDR_2,
   TEMP_4_ADDR_3, TEMP_4_ADDR_4, TEMP_4_ADDR_5, TEMP_4_ADDR_6, TEMP_4_ADDR_7};
 
-SDI12 sdi(SDI_12_PIN);
 
 Adafruit_AM2315 am2315;
 Adafruit_ADS1115 ads;
