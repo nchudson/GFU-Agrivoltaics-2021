@@ -80,40 +80,40 @@
 
 // Network Variables
 static const uint8_t mac[] = {MAC_3_BYTE_0, MAC_3_BYTE_1, MAC_3_BYTE_2,
-  MAC_3_BYTE_3, MAC_3_BYTE_4, MAC_3_BYTE_5};
-static IPAddress onedot(1, 1, 1, 1);
-EthernetClient client;
-EthernetUDP udp;
-NTPClient ntp(udp, TIME_ZONE * SECS_PER_HOUR);
-const char* plot_3_pv_api_key = PLOT_3_PV_API_KEY;
-int32_t thingspeak_response = 0;
+                              MAC_3_BYTE_3, MAC_3_BYTE_4, MAC_3_BYTE_5};
+static IPAddress     onedot(1, 1, 1, 1);
+EthernetClient       client;
+EthernetUDP          udp;
+NTPClient            ntp(udp, TIME_ZONE * SECS_PER_HOUR);
+const char*          plot_3_pv_api_key = PLOT_3_PV_API_KEY;
+int32_t              thingspeak_response = 0;
 
 // Sensor Objects
-OneWire oneWire(ONE_WIRE_PIN);
-DallasTemperature temp_sensors(&oneWire);
-DeviceAddress temp_5_addr = {TEMP_5_ADDR_0, TEMP_5_ADDR_1, TEMP_5_ADDR_2,
-  TEMP_5_ADDR_3, TEMP_5_ADDR_4, TEMP_5_ADDR_5, TEMP_5_ADDR_6, TEMP_5_ADDR_7};
-DeviceAddress temp_6_addr = {TEMP_6_ADDR_0, TEMP_6_ADDR_1, TEMP_6_ADDR_2,
-  TEMP_6_ADDR_3, TEMP_6_ADDR_4, TEMP_6_ADDR_5, TEMP_6_ADDR_6, TEMP_6_ADDR_7};
-DeviceAddress temp_7_addr = {TEMP_7_ADDR_0, TEMP_7_ADDR_1, TEMP_7_ADDR_2,
-  TEMP_7_ADDR_3, TEMP_7_ADDR_4, TEMP_7_ADDR_5, TEMP_7_ADDR_6, TEMP_7_ADDR_7};
+OneWire              oneWire(ONE_WIRE_PIN);
+DallasTemperature    temp_sensors(&oneWire);
+DeviceAddress        temp_5_addr = {TEMP_5_ADDR_0, TEMP_5_ADDR_1, TEMP_5_ADDR_2, TEMP_5_ADDR_3,
+                                    TEMP_5_ADDR_4, TEMP_5_ADDR_5, TEMP_5_ADDR_6, TEMP_5_ADDR_7};
+DeviceAddress        temp_6_addr = {TEMP_6_ADDR_0, TEMP_6_ADDR_1, TEMP_6_ADDR_2, TEMP_6_ADDR_3,
+                                    TEMP_6_ADDR_4, TEMP_6_ADDR_5, TEMP_6_ADDR_6, TEMP_6_ADDR_7};
+DeviceAddress        temp_7_addr = {TEMP_7_ADDR_0, TEMP_7_ADDR_1, TEMP_7_ADDR_2, TEMP_7_ADDR_3,
+                                    TEMP_7_ADDR_4, TEMP_7_ADDR_5, TEMP_7_ADDR_6, TEMP_7_ADDR_7};
 
-Adafruit_ADS1115 ads;
+Adafruit_ADS1115     ads;
 
-static const char date_string[23];
-static const char file_name[12];
+static const char    date_string[23];
+static const char    file_name[12];
 
-File log_file;
+File                 log_file;
 
-time_t cur_time;
-time_t prev_time;
+time_t               cur_time;
+time_t               prev_time;
 
 // Sensor Data
-float temp_5_temp;
-float temp_6_temp;
-float temp_7_temp;
+float                temp_5_temp;
+float                temp_6_temp;
+float                temp_7_temp;
 
-int16_t irad_2_wsqm;
+int16_t              irad_2_wsqm;
 
 //------------------------------------------------------------------------------
 //      __   __   __  ___  __  ___      __   ___  __
@@ -123,9 +123,9 @@ int16_t irad_2_wsqm;
 //------------------------------------------------------------------------------
 
 time_t get_ntp_time();
-void read_sensors();
-bool create_log_file();
-void system_reset();
+void   read_sensors();
+bool   create_log_file();
+void   system_reset();
 
 //------------------------------------------------------------------------------
 //      __        __          __
@@ -326,9 +326,13 @@ void read_sensors() {
 //==============================================================================
 bool create_log_file() {
   // Local variables.
-  time_t t = now();
-  bool exists = false;
-  bool created = false;
+  time_t t;
+  bool exists;
+  bool created;
+
+  t       = now();
+  exists  = false;
+  created = false;
 
   // Close the current file and create a new one.
   log_file.close();

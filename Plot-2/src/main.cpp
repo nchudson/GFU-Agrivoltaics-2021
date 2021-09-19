@@ -90,57 +90,56 @@
 
 // Network Variables
 static const uint8_t mac[] = {MAC_2_BYTE_0, MAC_2_BYTE_1, MAC_2_BYTE_2,
-  MAC_2_BYTE_3, MAC_2_BYTE_4, MAC_2_BYTE_5};
-static IPAddress onedot(1, 1, 1, 1);
-EthernetClient client;
-EthernetUDP udp;
-NTPClient ntp(udp, TIME_ZONE * SECS_PER_HOUR);
-const char* plot_2_env_api_key = PLOT_2_ENV_API_KEY;
-const char* plot_2_pv_api_key = PLOT_2_PV_API_KEY;
-int32_t thingspeak_response = 0;
+                              MAC_2_BYTE_3, MAC_2_BYTE_4, MAC_2_BYTE_5};
+static               IPAddress onedot(1, 1, 1, 1);
+EthernetClient       client;
+EthernetUDP          udp;
+NTPClient            ntp(udp, TIME_ZONE * SECS_PER_HOUR);
+const char*          plot_2_env_api_key = PLOT_2_ENV_API_KEY;
+const char*          plot_2_pv_api_key = PLOT_2_PV_API_KEY;
+int32_t              thingspeak_response = 0;
 
 // Sensor Objects
-OneWire oneWire(ONE_WIRE_PIN);
-DallasTemperature temp_sensors(&oneWire);
-DeviceAddress temp_1_addr = {TEMP_1_ADDR_0, TEMP_1_ADDR_1, TEMP_1_ADDR_2,
-  TEMP_1_ADDR_3, TEMP_1_ADDR_4, TEMP_1_ADDR_5, TEMP_1_ADDR_6, TEMP_1_ADDR_7};
-DeviceAddress temp_2_addr = {TEMP_2_ADDR_0, TEMP_2_ADDR_1, TEMP_2_ADDR_2,
-  TEMP_2_ADDR_3, TEMP_2_ADDR_4, TEMP_2_ADDR_5, TEMP_2_ADDR_6, TEMP_2_ADDR_7};
-DeviceAddress temp_3_addr = {TEMP_3_ADDR_0, TEMP_3_ADDR_1, TEMP_3_ADDR_2,
-  TEMP_3_ADDR_3, TEMP_3_ADDR_4, TEMP_3_ADDR_5, TEMP_3_ADDR_6, TEMP_3_ADDR_7};
-DeviceAddress temp_4_addr = {TEMP_4_ADDR_0, TEMP_4_ADDR_1, TEMP_4_ADDR_2,
-  TEMP_4_ADDR_3, TEMP_4_ADDR_4, TEMP_4_ADDR_5, TEMP_4_ADDR_6, TEMP_4_ADDR_7};
+OneWire              oneWire(ONE_WIRE_PIN);
+DallasTemperature    temp_sensors(&oneWire);
+DeviceAddress        temp_1_addr = {TEMP_1_ADDR_0, TEMP_1_ADDR_1, TEMP_1_ADDR_2, TEMP_1_ADDR_3,
+                                    TEMP_1_ADDR_4, TEMP_1_ADDR_5, TEMP_1_ADDR_6, TEMP_1_ADDR_7};
+DeviceAddress        temp_2_addr = {TEMP_2_ADDR_0, TEMP_2_ADDR_1, TEMP_2_ADDR_2, TEMP_2_ADDR_3,
+                                    TEMP_2_ADDR_4, TEMP_2_ADDR_5, TEMP_2_ADDR_6, TEMP_2_ADDR_7};
+DeviceAddress        temp_3_addr = {TEMP_3_ADDR_0, TEMP_3_ADDR_1, TEMP_3_ADDR_2, TEMP_3_ADDR_3,
+                                    TEMP_3_ADDR_4, TEMP_3_ADDR_5, TEMP_3_ADDR_6, TEMP_3_ADDR_7};
+DeviceAddress        temp_4_addr = {TEMP_4_ADDR_0, TEMP_4_ADDR_1, TEMP_4_ADDR_2, TEMP_4_ADDR_3,
+                                    TEMP_4_ADDR_4, TEMP_4_ADDR_5, TEMP_4_ADDR_6, TEMP_4_ADDR_7};
 
+Adafruit_AM2315      am2315;
+Adafruit_ADS1115     ads;
 
-Adafruit_AM2315 am2315;
-Adafruit_ADS1115 ads;
+static const char    date_string[23];
+static const char    file_name[12];
 
-static const char date_string[23];
-static const char file_name[12];
+File                 log_file;
 
-File log_file;
-
-time_t cur_time;
-time_t prev_time;
+time_t               cur_time;
+time_t               prev_time;
 
 // Sensor Data
-double soil_1_volw;
-double soil_3_sowp;
+double               soil_1_volw;
+double               soil_3_sowp;
 
-float soil_1_temp;
+float                soil_1_temp;
 
-float temp_1_temp;
+float                temp_1_temp;
 
-float tmph_1_temp;
-float tmph_1_humd;
+float                tmph_1_temp;
+float                tmph_1_humd;
 
-int16_t irad_1_wsqm;
+int16_t              irad_1_wsqm;
 
-float flow_1_tick;
+float                flow_1_tick;
 
-float temp_2_temp;
-float temp_3_temp;
-float temp_4_temp;
+float                temp_2_temp;
+float                temp_3_temp;
+float                temp_4_temp;
 
 //------------------------------------------------------------------------------
 //      __   __   __  ___  __  ___      __   ___  __
@@ -150,11 +149,11 @@ float temp_4_temp;
 //------------------------------------------------------------------------------
 
 time_t get_ntp_time();
-void read_sensors();
-bool create_log_file();
-bool teros_12_read(double *vwc, float *temp, uint16_t *conductivity);
-bool teros_21_read(double *matric_potential, float *temp);
-void system_reset();
+void   read_sensors();
+bool   create_log_file();
+bool   teros_12_read(double *vwc, float *temp, uint16_t *conductivity);
+bool   teros_21_read(double *matric_potential, float *temp);
+void   system_reset();
 
 //------------------------------------------------------------------------------
 //      __        __          __
@@ -222,7 +221,7 @@ void loop() {
   // Get current time.
   wdt_reset();
   prev_time = cur_time;
-  cur_time = now();
+  cur_time  = now();
 
   // If it the start of a new minute.
   if(minute(prev_time) != minute(cur_time)) {
@@ -478,9 +477,13 @@ void read_sensors() {
 //==============================================================================
 bool create_log_file() {
   // Local variables.
-  time_t t = now();
-  bool exists = false;
-  bool created = false;
+  time_t t;
+  bool   exists;
+  bool   created;
+
+  t       = now();
+  exists  = false;
+  created = false;
 
   // Close the current file and create a new one.
   log_file.close();
@@ -520,13 +523,20 @@ bool create_log_file() {
 //==============================================================================
 bool teros_12_read(double *vwc_counts, float *temp, uint16_t *conductivity) {
   // Local variables.
-  static char* input = (char*)malloc(25 * sizeof(char));
-  char* temp_str = NULL;
-  char* vwc_str = NULL;
-  char* cond_str = NULL;
-  size_t str_size;
-  bool valid = false;
-  bool temp_neg = true;
+  static char* input;
+  char*        temp_str;
+  char*        vwc_str;
+  char*        cond_str;
+  size_t       str_size;
+  bool         valid;
+  bool         temp_neg;
+
+  input     = (char*)malloc(25 * sizeof(char));
+  temp_str  = NULL;
+  vwc_str   = NULL;
+  cond_str  = NULL;
+  valid     = false;
+  temp_neg  = true;
 
   // Clear SDI buffer and send measure command.
   sdi.clearBuffer();
@@ -555,7 +565,7 @@ bool teros_12_read(double *vwc_counts, float *temp, uint16_t *conductivity) {
 
     // Get pointers to delimiters within response string.
     temp_str = strchr(input, '-');
-    vwc_str = strchr(input, '+');
+    vwc_str  = strchr(input, '+');
     cond_str = strrchr(input, '+');
 
     // If valid VWC and conductiity delimeters are found,
@@ -596,12 +606,18 @@ bool teros_12_read(double *vwc_counts, float *temp, uint16_t *conductivity) {
 //==============================================================================
 bool teros_21_read(double *matric_potential, float *temp) {
   // Local variables.
-  static char* input = (char*)malloc(25 * sizeof(char));
-  char* mtc_pot_str = NULL;
-  char* temp_str = NULL;
-  size_t str_size;
-  bool valid = false;
-  bool temp_neg = false;
+  static char* input;
+  char*        mtc_pot_str;
+  char*        temp_str;
+  size_t       str_size;
+  bool         valid;
+  bool         temp_neg;
+
+  input       = (char*)malloc(25 * sizeof(char));
+  mtc_pot_str = NULL;
+  temp_str    = NULL;
+  valid       = false;
+  temp_neg    = false;
 
   // Clear SDI buffer and send measure command.
   sdi.clearBuffer();

@@ -84,47 +84,47 @@
 
 // Network Variables
 static const uint8_t mac[] = {MAC_1_BYTE_0, MAC_1_BYTE_1, MAC_1_BYTE_2,
-  MAC_1_BYTE_3, MAC_1_BYTE_4, MAC_1_BYTE_5};
-static IPAddress onedot(1, 1, 1, 1);
-EthernetClient client;
-EthernetUDP udp;
-NTPClient ntp(udp, TIME_ZONE * SECS_PER_HOUR);
-static const char* plot_1_env_api_key = PLOT_1_ENV_API_KEY;
-int32_t thingspeak_response = 0;
+                              MAC_1_BYTE_3, MAC_1_BYTE_4, MAC_1_BYTE_5};
+static IPAddress     onedot(1, 1, 1, 1);
+EthernetClient       client;
+EthernetUDP          udp;
+NTPClient            ntp(udp, TIME_ZONE * SECS_PER_HOUR);
+static const char*   plot_1_env_api_key = PLOT_1_ENV_API_KEY;
+int32_t              thingspeak_response = 0;
 
 // Sensor Objects
-OneWire oneWire(ONE_WIRE_PIN);
-DallasTemperature temp_sensors(&oneWire);
-DeviceAddress temp_0_addr = {TEMP_0_ADDR_0, TEMP_0_ADDR_1, TEMP_0_ADDR_2,
-  TEMP_0_ADDR_3, TEMP_0_ADDR_4, TEMP_0_ADDR_5, TEMP_0_ADDR_6, TEMP_0_ADDR_7};
+OneWire              oneWire(ONE_WIRE_PIN);
+DallasTemperature    temp_sensors(&oneWire);
+DeviceAddress        temp_0_addr = {TEMP_0_ADDR_0, TEMP_0_ADDR_1, TEMP_0_ADDR_2, TEMP_0_ADDR_3,
+                                    TEMP_0_ADDR_4, TEMP_0_ADDR_5, TEMP_0_ADDR_6, TEMP_0_ADDR_7};
 
-SDI12 sdi(SDI_12_PIN);
+SDI12                sdi(SDI_12_PIN);
 
-Adafruit_AM2315 am2315;
-Adafruit_ADS1115 ads;
+Adafruit_AM2315      am2315;
+Adafruit_ADS1115     ads;
 
-static const char date_string[23];
-static const char file_name[12];
+static const char    date_string[23];
+static const char    file_name[12];
 
-File log_file;
+File                 log_file;
 
-time_t cur_time;
-time_t prev_time;
+time_t               cur_time;
+time_t               prev_time;
 
 // Sensor Data
-double soil_0_volw;
-double soil_2_sowp;
+double               soil_0_volw;
+double               soil_2_sowp;
 
-float soil_0_temp;
+float                soil_0_temp;
 
-float temp_0_temp;
+float                temp_0_temp;
 
-float tmph_0_temp;
-float tmph_0_humd;
+float                tmph_0_temp;
+float                tmph_0_humd;
 
-int16_t irad_0_wsqm;
+int16_t              irad_0_wsqm;
 
-int16_t flow_0_tick;
+int16_t              flow_0_tick;
 
 //------------------------------------------------------------------------------
 //      __   __   __  ___  __  ___      __   ___  __
@@ -134,11 +134,11 @@ int16_t flow_0_tick;
 //------------------------------------------------------------------------------
 
 time_t get_ntp_time();
-void read_sensors();
-bool create_log_file();
-bool teros_12_read(double *vwc, float *temp, uint16_t *conductivity);
-bool teros_21_read(double *matric_potential, float *temp);
-void system_reset();
+void   read_sensors();
+bool   create_log_file();
+bool   teros_12_read(double *vwc, float *temp, uint16_t *conductivity);
+bool   teros_21_read(double *matric_potential, float *temp);
+void   system_reset();
 
 //------------------------------------------------------------------------------
 //      __        __          __
@@ -204,7 +204,7 @@ void loop() {
   // Get current time.
   wdt_reset();
   prev_time = cur_time;
-  cur_time = now();
+  cur_time  = now();
 
   // If it the start of a new minute.
   if(minute(prev_time) != minute(cur_time)) {
@@ -406,9 +406,13 @@ void read_sensors() {
 //==============================================================================
 bool create_log_file() {
   // Local variables.
-  time_t t = now();
-  bool exists = false;
-  bool created = false;
+  time_t t;
+  bool   exists;
+  bool   created;
+
+  t       = now();
+  exists  = false;
+  created = false;
 
   // Close the current file and create a new one.
   log_file.close();
@@ -448,14 +452,21 @@ bool create_log_file() {
 //==============================================================================
 bool teros_12_read(double *vwc_counts, float *temp, uint16_t *conductivity) {
   // Local variables.
-  static char* input = (char*)malloc(25 * sizeof(char));
-  char* temp_str = NULL;
-  char* vwc_str = NULL;
-  char* cond_str = NULL;
-  size_t str_size;
-  bool valid = false;
-  bool temp_neg = true;
+  static char* input;
+  char*        temp_str;
+  char*        vwc_str;
+  char*        cond_str;
+  size_t       str_size;
+  bool         valid;
+  bool         temp_neg;
 
+  input    = (char*)malloc(25 * sizeof(char));
+  temp_str = NULL;
+  vwc_str  = NULL;
+  cond_str = NULL;
+  valid    = false;
+  temp_neg = true;
+  //
   // Clear SDI buffer and send measure command.
   sdi.clearBuffer();
   sdi.sendCommand("0M!");
@@ -524,12 +535,18 @@ bool teros_12_read(double *vwc_counts, float *temp, uint16_t *conductivity) {
 //==============================================================================
 bool teros_21_read(double *matric_potential, float *temp) {
   // Local variables.
-  static char* input = (char*)malloc(25 * sizeof(char));
-  char* mtc_pot_str = NULL;
-  char* temp_str = NULL;
-  size_t str_size;
-  bool valid = false;
-  bool temp_neg = false;
+  static char* input;
+  char*        mtc_pot_str;
+  char*        temp_str;
+  size_t       str_size;
+  bool         valid;
+  bool         temp_neg;
+
+  input       = (char*)malloc(25 * sizeof(char));
+  mtc_pot_str = NULL;
+  temp_str    = NULL;
+  valid       = false;
+  temp_neg    = false;
 
   // Clear SDI buffer and send measure command.
   sdi.clearBuffer();
